@@ -16,9 +16,14 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) { setError(error.message); setLoading(false); return; }
-    router.push("/dashboard");
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    console.log("Login result:", { data, error });
+    if (error) { 
+      setError(error.message); 
+      setLoading(false); 
+      return; 
+    }
+    window.location.href = "/dashboard";
   }
 
   return (

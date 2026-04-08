@@ -1,0 +1,132 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-dm-sans: "DM Sans", system-ui, sans-serif;
+    --font-playfair: "Playfair Display", Georgia, serif;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: #0b0f0d;
+    color: #e8ede9;
+    font-family: var(--font-dm-sans);
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0b0f0d;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1e2b22;
+    border-radius: 3px;
+  }
+
+  input:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 30px #161d18 inset !important;
+    -webkit-text-fill-color: #e8ede9 !important;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-ink-900 border border-ink-800 rounded-2xl p-6;
+  }
+
+  .input-field {
+    @apply w-full bg-ink-800 border border-ink-700 rounded-lg px-4 py-2.5 text-sm
+           text-ink-100 placeholder-ink-500 outline-none transition-colors
+           focus:border-gold-500 focus:ring-1 focus:ring-gold-500/30;
+  }
+
+  .select-field {
+    @apply w-full bg-ink-800 border border-ink-700 rounded-lg px-4 py-2.5 text-sm
+           text-ink-100 outline-none cursor-pointer transition-colors
+           focus:border-gold-500;
+  }
+
+  .btn-primary {
+    @apply bg-gradient-to-r from-forest-700 to-forest-600 text-gold-400
+           border border-gold-500/20 rounded-xl px-6 py-2.5 text-sm font-semibold
+           cursor-pointer transition-all hover:-translate-y-px hover:shadow-lg
+           hover:shadow-black/30 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-accent {
+    @apply bg-gradient-to-r from-gold-500 to-gold-300 text-ink-950
+           rounded-xl px-6 py-2.5 text-sm font-semibold cursor-pointer
+           transition-all hover:-translate-y-px hover:shadow-lg hover:shadow-gold-500/20
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply bg-transparent border border-ink-700 text-ink-400 rounded-xl
+           px-6 py-2.5 text-sm font-semibold cursor-pointer transition-colors
+           hover:border-ink-500 hover:text-ink-200;
+  }
+
+  .btn-danger {
+    @apply bg-transparent border border-red-800/50 text-red-400 rounded-xl
+           px-6 py-2.5 text-sm font-semibold cursor-pointer transition-colors
+           hover:border-red-600 hover:text-red-300;
+  }
+
+  .label {
+    @apply block text-xs font-semibold text-ink-400 uppercase tracking-widest mb-1.5;
+  }
+
+  .kpi-card {
+    @apply bg-ink-900 border border-ink-800 rounded-xl p-4;
+  }
+
+  .section-title {
+    @apply font-display text-2xl font-bold text-ink-50 mb-1;
+  }
+
+  .step-dot-active {
+    @apply w-7 h-7 rounded-full border-2 border-gold-500 flex items-center justify-center
+           text-xs font-bold text-gold-500;
+  }
+
+  .step-dot-done {
+    @apply w-7 h-7 rounded-full bg-gold-500 flex items-center justify-center
+           text-xs font-bold text-ink-950;
+  }
+
+  .step-dot-pending {
+    @apply w-7 h-7 rounded-full border-2 border-ink-700 flex items-center justify-center
+           text-xs font-bold text-ink-500;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-playfair);
+  }
+
+  .animate-fade-up {
+    animation: fadeUp 0.5s ease forwards;
+  }
+
+  @keyframes fadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

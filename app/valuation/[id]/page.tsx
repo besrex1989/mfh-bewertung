@@ -13,7 +13,6 @@ export default function ValuationDetailPage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
-
   const [loading, setLoading] = useState(true);
   const [valuation, setValuation] = useState<any>(null);
   const [result, setResult] = useState<any>(null);
@@ -22,32 +21,28 @@ export default function ValuationDetailPage() {
     async function load() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.push("/auth/login"); return; }
-
       const { data, error } = await supabase
         .from("valuations")
         .select("*, properties(name, address, city, canton, zip, build_year, condition, num_units, living_area, commercial_area)")
         .eq("id", id)
         .eq("user_id", session.user.id)
         .single();
-
       if (error || !data) { router.push("/dashboard"); return; }
-
       setValuation(data);
-
       const r = calculateValuation({
-        city:             data.properties?.city ?? "",
-        condition:        (data.properties?.condition as ConditionType) ?? "gut",
-        rentResidential:  data.rent_residential,
-        rentCommercial:   data.rent_commercial,
-        actualRent:       data.actual_rent ?? 0,
-        vacancyRate:      data.vacancy_rate,
-        operatingCosts:   data.operating_costs,
+        city: data.properties?.city ?? "",
+        condition: (data.properties?.condition as ConditionType) ?? "gut",
+        rentResidential: data.rent_residential,
+        rentCommercial: data.rent_commercial,
+        actualRent: data.actual_rent ?? 0,
+        vacancyRate: data.vacancy_rate,
+        operatingCosts: data.operating_costs,
         maintenanceCosts: data.maintenance_costs,
-        livingArea:       data.properties?.living_area ?? 0,
-        commercialArea:   data.properties?.commercial_area ?? 0,
-        microLocation:    data.micro_location ?? "gut",
-        macroLocation:    data.macro_location ?? "gut",
-        publicTransport:  data.public_transport ?? "gut",
+        livingArea: data.properties?.living_area ?? 0,
+        commercialArea: data.properties?.commercial_area ?? 0,
+        microLocation: data.micro_location ?? "gut",
+        macroLocation: data.macro_location ?? "gut",
+        publicTransport: data.public_transport ?? "gut",
       });
       setResult(r);
       setLoading(false);
@@ -62,7 +57,7 @@ export default function ValuationDetailPage() {
 
   if (loading) return (
     <div className="min-h-screen bg-ink-950 flex items-center justify-center">
-      <p className="text-ink-400">Laden…</p>
+      <p className="text-ink-400">Laden...</p>
     </div>
   );
 
@@ -79,12 +74,11 @@ export default function ValuationDetailPage() {
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="text-ink-400 hover:text-ink-200 text-sm transition-colors">← Dashboard</Link>
+            <Link href="/dashboard" className="text-ink-400 hover:text-ink-200 text-sm">← Dashboard</Link>
             <button onClick={handleLogout} className="btn-ghost text-xs px-4 py-2">Abmelden</button>
           </div>
         </div>
       </nav>
-
       <main className="max-w-4xl mx-auto px-4 py-10 pb-20">
         <div className="flex items-start justify-between mb-6 flex-wrap gap-4">
           <div>
@@ -92,8 +86,7 @@ export default function ValuationDetailPage() {
               {valuation.properties?.name ?? "Bewertung"}
             </h1>
             <p className="text-ink-400 text-sm">
-              {valuation.properties?.address}, {valuation.properties?.city} ·{" "}
-              {new Date(valuation.created_at).toLocaleDateString("de-CH")}
+              {valuation.properties?.address}, {valuation.properties?.city}
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -101,26 +94,15 @@ export default function ValuationDetailPage() {
             <Link href="/new" className="btn-primary px-4 py-2.5 text-sm">+ Neue Bewertung</Link>
           </div>
         </div>
-
         {result && <ResultCard result={result} effectiveIncome={valuation.effective_income} />}
-
-        {valuation.notes && (
-          <div className="card mt-5">
-            <h4 className="text-[11px] font-semibold text-ink-400 uppercase tracking-widest mb-2">Notizen</h4>
-            <p className="text-sm text-ink-200 leading-relaxed whitespace-pre-wrap">{valuation.notes}</p>
-          </div>
-        )}
-
         <div className="card mt-5">
           <h4 className="text-[11px] font-semibold text-ink-400 uppercase tracking-widest mb-4">Erfasste Ertragsdaten</h4>
           <div className="grid grid-cols-2 gap-3 text-sm">
             {[
               ["Soll-Mietertrag Wohnen", formatCHF(valuation.rent_residential)],
               ["Soll-Mietertrag Gewerbe", formatCHF(valuation.rent_commercial)],
-              ["Ist-Mietertrag", valuation.actual_rent ? formatCHF(valuation.actual_rent) : "—"],
-              ["Leerstandsquote", `${valuation.vacancy_rate} %`],
-              ["Betriebskosten", valuation.operating_costs > 0 ? formatCHF(valuation.operating_costs) : "—"],
-              ["Unterhaltskosten", valuation.maintenance_costs > 0 ? formatCHF(valuation.maintenance_costs) : "—"],
+              ["Leerstandsquote", valuation.vacancy_rate + " %"],
+              ["Betriebskosten", valuation.operating_costs > 0 ? formatCHF(valuation.operating_costs) : "---"],
             ].map(([l, val]) => (
               <div key={l} className="bg-ink-800/50 rounded-lg px-3 py-2.5">
                 <p className="text-[10px] text-ink-500 uppercase tracking-widest mb-0.5">{l}</p>

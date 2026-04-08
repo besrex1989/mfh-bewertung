@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
+import { createClient } from "@supabase/supabase-js";
 import { generateValuationPDF } from "@/utils/pdfGenerator";
-import type { Database } from "@/types/database";
 import type { ValuationWithProperty, Profile } from "@/types";
 
 export async function GET(request: NextRequest) {
@@ -13,31 +11,29 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Missing id" }, { status: 400 });
   }
 
-  // Auth check
-  const supabase = createServerComponentClient<Database>({ cookies });
-  const { data: { session } } = await supabase.auth.getSession();
+  const authHeader = request.headers.get("authorization");
+  const token = authHeader?.replace("Bearer ", "");
 
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    token ? { global: { headers: { Authorization: `Bearer ${token}` } } } : {}
+  );
 
-  // Fetch valuation
-  const { data: valuationData, error: vError } = await supabase
+  const { data: valuationData, error } = await supabase
     .from("valuations")
     .select("*, properties(name, address, city, canton)")
     .eq("id", id)
-    .eq("user_id", session.user.id)
     .single();
 
-  if (vError || !valuationData) {
-    return NextResponse.json({ error: "Valuation not found" }, { status: 404 });
+  if (error || !valuationData) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // Fetch profile
   const { data: profileData } = await supabase
     .from("profiles")
     .select("*")
-    .eq("id", session.user.id)
+    .limit(1)
     .single();
 
   try {
@@ -49,13 +45,13 @@ export async function GET(request: NextRequest) {
     return new NextResponse(Buffer.from(pdfBytes), {
       status: 200,
       headers: {
-        "Content-Type":        "application/pdf",
+        "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="Bewertung_${id.slice(0, 8)}.pdf"`,
-        "Cache-Control":       "no-store",
+        "Cache-Control": "no-store",
       },
     });
   } catch (err) {
-    console.error("PDF generation error:", err);
+    console.error("PDF error:", err);
     return NextResponse.json({ error: "PDF generation failed" }, { status: 500 });
   }
 }

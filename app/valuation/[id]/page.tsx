@@ -1,124 +1,126 @@
-import { cookies } from "next/headers";
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
-import { redirect, notFound } from "next/navigation";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import type { Database } from "@/types/database";
-import type { ValuationWithProperty } from "@/types";
-import type { LocationCategory, ConditionType } from "@/types";
-import { calculateValuation, formatCHF, formatPct, getLageLabel } from "@/lib/calculations";
-import Navbar from "@/components/Navbar";
+import { supabase } from "@/lib/supabaseClient";
+import { calculateValuation, formatCHF, formatPct } from "@/lib/calculations";
 import ResultCard from "@/components/ResultCard";
-import ScenarioTable from "@/components/ScenarioTable";
 import PDFDownloadButton from "@/components/PDFDownloadButton";
+import type { ConditionType } from "@/types";
 
-export const dynamic = "force-dynamic";
+export default function ValuationDetailPage() {
+  const router = useRouter();
+  const params = useParams();
+  const id = params.id as string;
 
-interface Props {
-  params: { id: string };
-}
+  const [loading, setLoading] = useState(true);
+  const [valuation, setValuation] = useState<any>(null);
+  const [result, setResult] = useState<any>(null);
 
-export default async function ValuationDetailPage({ params }: Props) {
-  const supabase = createServerComponentClient<Database>({ cookies });
+  useEffect(() => {
+    async function load() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { router.push("/auth/login"); return; }
 
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) redirect("/auth/login");
+      const { data, error } = await supabase
+        .from("valuations")
+        .select("*, properties(name, address, city, canton, zip, build_year, condition, num_units, living_area, commercial_area)")
+        .eq("id", id)
+        .eq("user_id", session.user.id)
+        .single();
 
-  const { data: valuationData } = await supabase
-    .from("valuations")
-    .select("*, properties(name, address, city, canton, zip, build_year, condition, num_units, living_area, commercial_area)")
-    .eq("id", params.id)
-    .eq("user_id", session.user.id)
-    .single();
+      if (error || !data) { router.push("/dashboard"); return; }
 
-  if (!valuationData) notFound();
+      setValuation(data);
 
-  const v = valuationData as ValuationWithProperty & {
-    properties: {
-      name: string; address: string; city: string; canton: string;
-      zip: string | null; build_year: number | null; condition: string | null;
-      num_units: number | null; living_area: number | null; commercial_area: number | null;
+      const r = calculateValuation({
+        city:             data.properties?.city ?? "",
+        condition:        (data.properties?.condition as ConditionType) ?? "gut",
+        rentResidential:  data.rent_residential,
+        rentCommercial:   data.rent_commercial,
+        actualRent:       data.actual_rent ?? 0,
+        vacancyRate:      data.vacancy_rate,
+        operatingCosts:   data.operating_costs,
+        maintenanceCosts: data.maintenance_costs,
+        livingArea:       data.properties?.living_area ?? 0,
+        commercialArea:   data.properties?.commercial_area ?? 0,
+        microLocation:    data.micro_location ?? "gut",
+        macroLocation:    data.macro_location ?? "gut",
+        publicTransport:  data.public_transport ?? "gut",
+      });
+      setResult(r);
+      setLoading(false);
     }
-  };
+    load();
+  }, [id, router]);
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", session.user.id)
-    .single();
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.push("/");
+  }
 
-  // Re-compute result for ResultCard
-  const result = calculateValuation({
-    city:             v.properties?.city ?? "",
-    condition:        (v.properties?.condition as ConditionType) ?? "gut",
-    rentResidential:  v.rent_residential,
-    rentCommercial:   v.rent_commercial,
-    actualRent:       v.actual_rent ?? 0,
-    vacancyRate:      v.vacancy_rate,
-    operatingCosts:   v.operating_costs,
-    maintenanceCosts: v.maintenance_costs,
-    livingArea:       v.properties?.living_area ?? 0,
-    commercialArea:   v.properties?.commercial_area ?? 0,
-    microLocation:    (v.micro_location as any) ?? "gut",
-    macroLocation:    (v.macro_location as any) ?? "gut",
-    publicTransport:  (v.public_transport as any) ?? "gut",
-  });
+  if (loading) return (
+    <div className="min-h-screen bg-ink-950 flex items-center justify-center">
+      <p className="text-ink-400">Laden…</p>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-ink-950">
-      <Navbar userEmail={session.user.email} userName={profile?.full_name} />
+      <nav className="border-b border-ink-800 bg-ink-900/90 backdrop-blur sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-md bg-gradient-to-br from-forest-700 to-gold-500 flex items-center justify-center">
+              <span className="text-ink-950 text-sm font-black">M</span>
+            </div>
+            <span className="font-display font-bold text-base text-ink-50 tracking-tight">
+              MFH <span className="text-gold-500">Bewertung</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <Link href="/dashboard" className="text-ink-400 hover:text-ink-200 text-sm transition-colors">← Dashboard</Link>
+            <button onClick={handleLogout} className="btn-ghost text-xs px-4 py-2">Abmelden</button>
+          </div>
+        </div>
+      </nav>
 
       <main className="max-w-4xl mx-auto px-4 py-10 pb-20">
-        {/* Back + header */}
         <div className="flex items-start justify-between mb-6 flex-wrap gap-4">
           <div>
-            <Link
-              href="/dashboard"
-              className="text-ink-500 hover:text-ink-300 text-sm transition-colors inline-flex items-center gap-1 mb-3"
-            >
-              ← Dashboard
-            </Link>
             <h1 className="font-display text-3xl font-bold text-ink-50 mb-1">
-              {v.properties?.name ?? "Bewertung"}
+              {valuation.properties?.name ?? "Bewertung"}
             </h1>
             <p className="text-ink-400 text-sm">
-              {v.properties?.address}, {v.properties?.zip ?? ""} {v.properties?.city} ·{" "}
-              {new Date(v.created_at).toLocaleDateString("de-CH")}
+              {valuation.properties?.address}, {valuation.properties?.city} ·{" "}
+              {new Date(valuation.created_at).toLocaleDateString("de-CH")}
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
-            <PDFDownloadButton valuationId={v.id} />
-            <Link href="/new" className="btn-primary px-4 py-2.5 text-sm">
-              + Neue Bewertung
-            </Link>
+            <PDFDownloadButton valuationId={id} />
+            <Link href="/new" className="btn-primary px-4 py-2.5 text-sm">+ Neue Bewertung</Link>
           </div>
         </div>
 
-        {/* Result Card */}
-        <ResultCard result={result} effectiveIncome={v.effective_income} />
+        {result && <ResultCard result={result} effectiveIncome={valuation.effective_income} />}
 
-        {/* Notes */}
-        {v.notes && (
+        {valuation.notes && (
           <div className="card mt-5">
-            <h4 className="text-[11px] font-semibold text-ink-400 uppercase tracking-widest mb-2">
-              Notizen
-            </h4>
-            <p className="text-sm text-ink-200 leading-relaxed whitespace-pre-wrap">{v.notes}</p>
+            <h4 className="text-[11px] font-semibold text-ink-400 uppercase tracking-widest mb-2">Notizen</h4>
+            <p className="text-sm text-ink-200 leading-relaxed whitespace-pre-wrap">{valuation.notes}</p>
           </div>
         )}
 
-        {/* Raw Ertragsdaten */}
         <div className="card mt-5">
-          <h4 className="text-[11px] font-semibold text-ink-400 uppercase tracking-widest mb-4">
-            Erfasste Ertragsdaten
-          </h4>
+          <h4 className="text-[11px] font-semibold text-ink-400 uppercase tracking-widest mb-4">Erfasste Ertragsdaten</h4>
           <div className="grid grid-cols-2 gap-3 text-sm">
             {[
-              ["Soll-Mietertrag Wohnen", formatCHF(v.rent_residential)],
-              ["Soll-Mietertrag Gewerbe", formatCHF(v.rent_commercial)],
-              ["Ist-Mietertrag", v.actual_rent ? formatCHF(v.actual_rent) : "—"],
-              ["Leerstandsquote", `${v.vacancy_rate} %`],
-              ["Betriebskosten", v.operating_costs > 0 ? formatCHF(v.operating_costs) : "—"],
-              ["Unterhaltskosten", v.maintenance_costs > 0 ? formatCHF(v.maintenance_costs) : "—"],
+              ["Soll-Mietertrag Wohnen", formatCHF(valuation.rent_residential)],
+              ["Soll-Mietertrag Gewerbe", formatCHF(valuation.rent_commercial)],
+              ["Ist-Mietertrag", valuation.actual_rent ? formatCHF(valuation.actual_rent) : "—"],
+              ["Leerstandsquote", `${valuation.vacancy_rate} %`],
+              ["Betriebskosten", valuation.operating_costs > 0 ? formatCHF(valuation.operating_costs) : "—"],
+              ["Unterhaltskosten", valuation.maintenance_costs > 0 ? formatCHF(valuation.maintenance_costs) : "—"],
             ].map(([l, val]) => (
               <div key={l} className="bg-ink-800/50 rounded-lg px-3 py-2.5">
                 <p className="text-[10px] text-ink-500 uppercase tracking-widest mb-0.5">{l}</p>

@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
       profileData as Profile | null
     );
 
-    return new NextResponse(pdfBytes, {
+    return new NextResponse(Buffer.from(pdfBytes), {
       status: 200,
       headers: {
         "Content-Type":        "application/pdf",

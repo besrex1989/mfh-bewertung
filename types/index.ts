@@ -78,6 +78,7 @@ export interface ValuationResult {
   netIncome:            number;
   sustainableIncome:    number;
   parkingIncome:        number;
+  substanzValue:        number;
   capRateBreakdown:     CapRateBreakdown;
   valueSimple:          number;
   valueSustainable:     number;
@@ -96,11 +97,16 @@ export interface ValuationResult {
 }
 
 export interface CapRateBreakdown {
-  base:                number;
+  riskFreeRate:        number;
+  marketPremium:       number;
+  macroDelta:          number;
+  microDelta:          number;
   conditionDelta:      number;
+  ageDelta:            number;
+  qualityDelta:        number;
   commercialSurcharge: number;
-  microCorrection:     number;
-  oevCorrection:       number;
+  oevDelta:            number;
+  base:                number;
   final:               number;
 }
 

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import { calculateValuation, formatCHF, formatPct, CONDITION_OPTIONS } from "@/lib/calculations";
+import { calculateValuation, formatCHF, formatPct, CONDITION_OPTIONS, QUALITY_OPTIONS } from "@/lib/calculations";
 import ResultCard from "@/components/ResultCard";
 import PDFDownloadButton from "@/components/PDFDownloadButton";
 import { MUNICIPALITIES, KANTONE } from "@/lib/municipalities";
@@ -47,7 +47,9 @@ export default function ValuationDetailPage() {
         canton:          data.properties?.canton ?? "BE",
         zip:             data.properties?.zip ?? "",
         build_year:      data.properties?.build_year ?? "",
+        renov_year:      data.properties?.renov_year ?? "",
         condition:       data.properties?.condition ?? "stufe4",
+        build_quality:   data.properties?.build_quality ?? "gut",
         num_units:       data.properties?.num_units ?? "",
         living_area:     data.properties?.living_area ?? "",
         commercial_area: data.properties?.commercial_area ?? "",
@@ -80,20 +82,23 @@ export default function ValuationDetailPage() {
       const r = calculateValuation({
         city:                  prop?.city ?? "",
         condition:             prop?.condition ?? "stufe4",
+        buildYear:             prop?.build_year  ? +prop.build_year  : undefined,
+        renovYear:             prop?.renov_year  ? +prop.renov_year  : undefined,
+        buildQuality:          prop?.build_quality ?? "gut",
         rentResidentialTarget: +val.rent_residential || 0,
-        rentCommercialTarget:  +val.rent_commercial || 0,
+        rentCommercialTarget:  +val.rent_commercial  || 0,
         rentResidentialActual: +val.rent_residential_actual || 0,
-        rentCommercialActual:  +val.rent_commercial_actual || 0,
-        vacancyRate:           +val.vacancy_rate || 0,
-        vacancyAvg5y:          +val.vacancy_avg5y || 0,
-        operatingCosts:        +val.operating_costs || 0,
+        rentCommercialActual:  +val.rent_commercial_actual  || 0,
+        vacancyRate:           +val.vacancy_rate    || 0,
+        vacancyAvg5y:          +val.vacancy_avg5y   || 0,
+        operatingCosts:        +val.operating_costs  || 0,
         maintenanceCosts:      +val.maintenance_costs || 0,
-        livingArea:            +prop?.living_area || 0,
+        livingArea:            +prop?.living_area    || 0,
         commercialArea:        +prop?.commercial_area || 0,
         aapCount:              +val.aap_count || 0,
         ehpCount:              +val.ehp_count || 0,
-        microLocation:         val.micro_location ?? "gut",
-        macroLocation:         val.macro_location ?? "gut",
+        microLocation:         val.micro_location  ?? "gut",
+        macroLocation:         val.macro_location  ?? "gut",
         publicTransport:       val.public_transport ?? "gut",
       });
       setResult(r);
@@ -102,15 +107,18 @@ export default function ValuationDetailPage() {
 
   async function handleSave() {
     setSaving(true);
+
     await supabase.from("properties").update({
       name:            propForm.name,
       address:         propForm.address,
       city:            propForm.city,
       canton:          propForm.canton,
       zip:             propForm.zip || null,
-      build_year:      propForm.build_year ? +propForm.build_year : null,
+      build_year:      propForm.build_year  ? +propForm.build_year  : null,
+      renov_year:      propForm.renov_year  ? +propForm.renov_year  : null,
+      build_quality:   propForm.build_quality || "gut",
       condition:       propForm.condition,
-      num_units:       propForm.num_units ? +propForm.num_units : null,
+      num_units:       propForm.num_units   ? +propForm.num_units   : null,
       living_area:     propForm.living_area ? +propForm.living_area : null,
       commercial_area: propForm.commercial_area ? +propForm.commercial_area : null,
     }).eq("id", valuation.property_id);
@@ -119,15 +127,18 @@ export default function ValuationDetailPage() {
     const r = calculateValuation({
       city:                  mergedProp.city ?? "",
       condition:             mergedProp.condition ?? "stufe4",
+      buildYear:             mergedProp.build_year  ? +mergedProp.build_year  : undefined,
+      renovYear:             mergedProp.renov_year  ? +mergedProp.renov_year  : undefined,
+      buildQuality:          mergedProp.build_quality ?? "gut",
       rentResidentialTarget: +valForm.rent_residential || 0,
-      rentCommercialTarget:  +valForm.rent_commercial || 0,
+      rentCommercialTarget:  +valForm.rent_commercial  || 0,
       rentResidentialActual: +valForm.rent_residential_actual || 0,
-      rentCommercialActual:  +valForm.rent_commercial_actual || 0,
-      vacancyRate:           +valForm.vacancy_rate || 0,
-      vacancyAvg5y:          +valForm.vacancy_avg5y || 0,
-      operatingCosts:        +valForm.operating_costs || 0,
+      rentCommercialActual:  +valForm.rent_commercial_actual  || 0,
+      vacancyRate:           +valForm.vacancy_rate    || 0,
+      vacancyAvg5y:          +valForm.vacancy_avg5y   || 0,
+      operatingCosts:        +valForm.operating_costs  || 0,
       maintenanceCosts:      +valForm.maintenance_costs || 0,
-      livingArea:            +propForm.living_area || 0,
+      livingArea:            +propForm.living_area    || 0,
       commercialArea:        +propForm.commercial_area || 0,
       aapCount:              +valForm.aap_count || 0,
       ehpCount:              +valForm.ehp_count || 0,
@@ -137,35 +148,35 @@ export default function ValuationDetailPage() {
     });
 
     await supabase.from("valuations").update({
-      rent_residential:         +valForm.rent_residential || 0,
-      rent_commercial:          +valForm.rent_commercial || 0,
-      rent_residential_actual:  valForm.rent_residential_actual ? +valForm.rent_residential_actual : null,
-      rent_commercial_actual:   valForm.rent_commercial_actual  ? +valForm.rent_commercial_actual  : null,
-      vacancy_rate:             +valForm.vacancy_rate || 0,
-      vacancy_avg5y:            +valForm.vacancy_avg5y || 0,
-      operating_costs:          +valForm.operating_costs || 0,
-      maintenance_costs:        +valForm.maintenance_costs || 0,
-      aap_count:                +valForm.aap_count || 0,
-      ehp_count:                +valForm.ehp_count || 0,
-      micro_location:           valForm.micro_location,
-      macro_location:           valForm.macro_location,
-      public_transport:         valForm.public_transport,
-      notes:                    valForm.notes || null,
-      cap_rate:                 r.capRateBreakdown.final,
-      gross_income:             r.grossIncome,
-      effective_income:         r.effectiveIncome,
-      net_income:               r.netIncome > 0 ? r.netIncome : null,
-      value_simple:             r.valueSimple,
-      value_extended:           r.valueExtended > 0 ? r.valueExtended : null,
-      value_conservative:       r.valueConservative,
-      value_optimistic:         r.valueOptimistic,
-      base_cap_rate:            r.capRateBreakdown.base,
-      condition_delta:          r.capRateBreakdown.conditionDelta,
-      commercial_surcharge:     r.capRateBreakdown.commercialSurcharge,
-      micro_correction:         r.capRateBreakdown.microCorrection,
-      oev_correction:           r.capRateBreakdown.oevCorrection,
-      location_category:        r.locationCategory,
-      confidence:               r.confidence,
+      rent_residential:        +valForm.rent_residential || 0,
+      rent_commercial:         +valForm.rent_commercial  || 0,
+      rent_residential_actual: valForm.rent_residential_actual ? +valForm.rent_residential_actual : null,
+      rent_commercial_actual:  valForm.rent_commercial_actual  ? +valForm.rent_commercial_actual  : null,
+      vacancy_rate:            +valForm.vacancy_rate    || 0,
+      vacancy_avg5y:           +valForm.vacancy_avg5y   || 0,
+      operating_costs:         +valForm.operating_costs  || 0,
+      maintenance_costs:       +valForm.maintenance_costs || 0,
+      aap_count:               +valForm.aap_count || 0,
+      ehp_count:               +valForm.ehp_count || 0,
+      micro_location:          valForm.micro_location,
+      macro_location:          valForm.macro_location,
+      public_transport:        valForm.public_transport,
+      notes:                   valForm.notes || null,
+      cap_rate:                r.capRateBreakdown.final,
+      gross_income:            r.grossIncome,
+      effective_income:        r.effectiveIncome,
+      net_income:              r.netIncome > 0 ? r.netIncome : null,
+      value_simple:            r.valueSimple,
+      value_extended:          r.valueExtended > 0 ? r.valueExtended : null,
+      value_conservative:      r.valueConservative,
+      value_optimistic:        r.valueOptimistic,
+      base_cap_rate:           r.capRateBreakdown.base,
+      condition_delta:         r.capRateBreakdown.conditionDelta,
+      commercial_surcharge:    r.capRateBreakdown.commercialSurcharge,
+      micro_correction:        r.capRateBreakdown.microDelta,
+      oev_correction:          r.capRateBreakdown.oevDelta,
+      location_category:       r.locationCategory,
+      confidence:              r.confidence,
     }).eq("id", id);
 
     setResult(r);
@@ -176,33 +187,32 @@ export default function ValuationDetailPage() {
   }
 
   const updP = (k: string, v: string) => setPropForm((p: any) => ({ ...p, [k]: v }));
-  const updV = (k: string, v: string) => setValForm((p: any) => ({ ...p, [k]: v }));
+  const updV = (k: string, v: string) => setValForm((p: any)  => ({ ...p, [k]: v }));
 
-  const Inp = ({ label, k, source, type = "number", note }: any) => (
-    <div>
-      <label className="label">{label}</label>
-      <input
-        type={type}
-        value={source === "p" ? propForm[k] : valForm[k]}
-        onChange={e => source === "p" ? updP(k, e.target.value) : updV(k, e.target.value)}
-        className="input-field"
-      />
-      {note && <p className="text-xs text-gray-400 mt-1">{note}</p>}
-    </div>
-  );
+  function Inp({ label, k, source, type = "number", note }: any) {
+    return (
+      <div>
+        <label className="label">{label}</label>
+        <input type={type} value={source === "p" ? propForm[k] : valForm[k]}
+          onChange={e => source === "p" ? updP(k, e.target.value) : updV(k, e.target.value)}
+          className="input-field" />
+        {note && <p className="text-xs text-gray-400 mt-1">{note}</p>}
+      </div>
+    );
+  }
 
-  const Sel = ({ label, k, source, options }: any) => (
-    <div>
-      <label className="label">{label}</label>
-      <select
-        value={source === "p" ? propForm[k] : valForm[k]}
-        onChange={e => source === "p" ? updP(k, e.target.value) : updV(k, e.target.value)}
-        className="select-field"
-      >
-        {options.map((o: any) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-    </div>
-  );
+  function Sel({ label, k, source, options }: any) {
+    return (
+      <div>
+        <label className="label">{label}</label>
+        <select value={source === "p" ? propForm[k] : valForm[k]}
+          onChange={e => source === "p" ? updP(k, e.target.value) : updV(k, e.target.value)}
+          className="select-field">
+          {options.map((o: any) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+    );
+  }
 
   const locationOpts = [
     { value: "sehr_gut", label: "Sehr gut" },
@@ -231,30 +241,39 @@ export default function ValuationDetailPage() {
           </div>
           <div className="flex items-center gap-3">
             <Link href="/dashboard" className="text-gray-500 hover:text-gray-800 text-sm">&larr; Dashboard</Link>
-            <button onClick={async () => { await supabase.auth.signOut(); router.push("/"); }} className="btn-ghost text-xs px-4 py-2">Abmelden</button>
+            <button onClick={async () => { await supabase.auth.signOut(); router.push("/"); }}
+              className="btn-ghost text-xs px-4 py-2">Abmelden</button>
           </div>
         </div>
       </nav>
 
       <main className="max-w-4xl mx-auto px-4 py-10 pb-20">
+
+        {/* Header */}
         <div className="flex items-start justify-between mb-6 flex-wrap gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-1">{property?.name ?? "Bewertung"}</h1>
             <p className="text-gray-500 text-sm">{property?.address}, {property?.city}</p>
+            {property?.build_year && (
+              <p className="text-gray-400 text-xs mt-0.5">
+                Baujahr {property.build_year}
+                {property.renov_year && ` · Sanierung ${property.renov_year}`}
+                {" · "}{CONDITION_OPTIONS.find(o => o.value === property.condition)?.label ?? ""}
+                {" · "}{QUALITY_OPTIONS.find(o => o.value === property.build_quality)?.label ?? ""}
+              </p>
+            )}
           </div>
           <div className="flex gap-2 flex-wrap">
             {!editing && <PDFDownloadButton valuationId={id} />}
-            <button
-              onClick={() => setEditing(!editing)}
-              className={editing ? "btn-ghost px-4 py-2.5 text-sm" : "btn-primary px-4 py-2.5 text-sm"}
-            >
-              {editing ? "Abbrechen" : "✏️ Bearbeiten"}
+            <button onClick={() => setEditing(!editing)}
+              className={editing ? "btn-ghost px-4 py-2.5 text-sm" : "btn-primary px-4 py-2.5 text-sm"}>
+              {editing ? "Abbrechen" : "Bearbeiten"}
             </button>
             <Link href="/new" className="btn-accent px-4 py-2.5 text-sm">+ Neue Bewertung</Link>
           </div>
         </div>
 
-        {/* EDIT PANEL */}
+        {/* Edit Panel */}
         {editing && (
           <div className="card mb-6">
             <h3 className="text-lg font-bold text-gray-900 mb-4">Daten bearbeiten</h3>
@@ -263,9 +282,8 @@ export default function ValuationDetailPage() {
                 <button key={t} onClick={() => setActiveTab(t)}
                   className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
                     activeTab === t ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"
-                  }`}
-                >
-                  {t === "objekt" ? "Objekt" : t === "ertraege" ? "Erträge" : "Lage"}
+                  }`}>
+                  {t === "objekt" ? "Objekt" : t === "ertraege" ? "Ertraege" : "Lage"}
                 </button>
               ))}
             </div>
@@ -285,10 +303,12 @@ export default function ValuationDetailPage() {
                 </div>
                 <Sel label="Kanton" k="canton" source="p" options={KANTONE.map(k => ({ value: k, label: k }))} />
                 <Inp label="Baujahr" k="build_year" source="p" />
+                <Inp label="Sanierungsjahr" k="renov_year" source="p" />
                 <Sel label="Zustand" k="condition" source="p" options={CONDITION_OPTIONS.map(o => ({ value: o.value, label: o.label }))} />
+                <Sel label="Bauqualitaet" k="build_quality" source="p" options={QUALITY_OPTIONS.map(o => ({ value: o.value, label: o.label }))} />
                 <Inp label="Anzahl Wohnungen" k="num_units" source="p" />
-                <Inp label="Wohnfläche (m²)" k="living_area" source="p" />
-                <Inp label="Gewerbefläche (m²)" k="commercial_area" source="p" />
+                <Inp label="Wohnflaeche (m2)" k="living_area" source="p" />
+                <Inp label="Gewerbeflaeche (m2)" k="commercial_area" source="p" />
               </div>
             )}
 
@@ -305,19 +325,19 @@ export default function ValuationDetailPage() {
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Ist-Mietertrag</p>
                   <div className="grid grid-cols-2 gap-3">
                     <Inp label="Wohnen p.a. (CHF)" k="rent_residential_actual" source="v" note="Leer = identisch mit Soll" />
-                    <Inp label="Gewerbe p.a. (CHF)" k="rent_commercial_actual" source="v" note="Leer = identisch mit Soll" />
+                    <Inp label="Gewerbe p.a. (CHF)" k="rent_commercial_actual"  source="v" note="Leer = identisch mit Soll" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <Inp label="Leerstand aktuell (%)" k="vacancy_rate" source="v" />
-                  <Inp label="Leerstand Ø 5 Jahre (%)" k="vacancy_avg5y" source="v" />
+                  <Inp label="Leerstand aktuell (%)"    k="vacancy_rate"  source="v" />
+                  <Inp label="Leerstand Ø 5 Jahre (%)"  k="vacancy_avg5y" source="v" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <Inp label="Betriebskosten p.a." k="operating_costs" source="v" />
-                  <Inp label="Unterhaltskosten p.a." k="maintenance_costs" source="v" />
+                  <Inp label="Betriebskosten p.a."   k="operating_costs"   source="v" />
+                  <Inp label="Unterhaltskosten p.a." k="maintenance_costs"  source="v" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <Inp label="Abstellplätze Aussen (AAP)" k="aap_count" source="v" />
+                  <Inp label="Abstellplaetze Aussen (AAP)" k="aap_count" source="v" />
                   <Inp label="Einstellhalle / Garagen (EHP)" k="ehp_count" source="v" />
                 </div>
                 <div>
@@ -330,9 +350,9 @@ export default function ValuationDetailPage() {
 
             {activeTab === "lage" && (
               <div className="grid grid-cols-2 gap-4">
-                <Sel label="Mikrolage" k="micro_location" source="v" options={locationOpts} />
-                <Sel label="Makrolage" k="macro_location" source="v" options={locationOpts} />
-                <Sel label="ÖV-Anbindung" k="public_transport" source="v" options={locationOpts} />
+                <Sel label="Mikrolage"     k="micro_location"   source="v" options={locationOpts} />
+                <Sel label="Makrolage"     k="macro_location"   source="v" options={locationOpts} />
+                <Sel label="OeV-Anbindung" k="public_transport" source="v" options={locationOpts} />
               </div>
             )}
 
@@ -345,7 +365,17 @@ export default function ValuationDetailPage() {
           </div>
         )}
 
-        {result && <ResultCard result={result} effectiveIncome={valuation.effective_income} />}
+        {/* Result */}
+        {result && (
+          <ResultCard
+            result={result}
+            effectiveIncome={valuation.effective_income}
+            buildYear={property?.build_year ?? undefined}
+            renovYear={property?.renov_year ?? undefined}
+            livingArea={property?.living_area ?? undefined}
+            condition={property?.condition ?? undefined}
+          />
+        )}
 
         {valuation.notes && !editing && (
           <div className="card mt-5">

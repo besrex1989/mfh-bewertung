@@ -21,10 +21,23 @@ export interface Property {
   canton:          string;
   zip:             string | null;
   build_year:      number | null;
+  renov_year:      number | null;
+  build_quality:   string | null;
   condition:       string | null;
   num_units:       number | null;
   living_area:     number | null;
   commercial_area: number | null;
+  // Wohnungsraster
+  units_1z:        number | null;
+  units_1_5z:      number | null;
+  units_2z:        number | null;
+  units_2_5z:      number | null;
+  units_3z:        number | null;
+  units_3_5z:      number | null;
+  units_4z:        number | null;
+  units_4_5z:      number | null;
+  units_5z:        number | null;
+  units_5plus:     number | null;
   created_at:      string;
   updated_at:      string;
 }

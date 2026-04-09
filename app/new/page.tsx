@@ -31,11 +31,23 @@ export default function NewValuationPage() {
         city:            propertyForm.city,
         canton:          propertyForm.canton,
         zip:             propertyForm.zip || null,
-        build_year:      propertyForm.build_year ? +propertyForm.build_year : null,
+        build_year:      propertyForm.build_year  ? +propertyForm.build_year  : null,
+        renov_year:      propertyForm.renov_year  ? +propertyForm.renov_year  : null,
+        build_quality:   propertyForm.build_quality || "gut",
         condition:       propertyForm.condition,
-        num_units:       propertyForm.num_units ? +propertyForm.num_units : null,
+        num_units:       propertyForm.num_units   ? +propertyForm.num_units   : null,
         living_area:     propertyForm.living_area ? +propertyForm.living_area : null,
         commercial_area: propertyForm.commercial_area ? +propertyForm.commercial_area : null,
+        units_1z:    +propertyForm.units_1z    || 0,
+        units_1_5z:  +propertyForm.units_1_5z  || 0,
+        units_2z:    +propertyForm.units_2z    || 0,
+        units_2_5z:  +propertyForm.units_2_5z  || 0,
+        units_3z:    +propertyForm.units_3z    || 0,
+        units_3_5z:  +propertyForm.units_3_5z  || 0,
+        units_4z:    +propertyForm.units_4z    || 0,
+        units_4_5z:  +propertyForm.units_4_5z  || 0,
+        units_5z:    +propertyForm.units_5z    || 0,
+        units_5plus: +propertyForm.units_5plus || 0,
       });
 
       if (!property) throw new Error("Objekt konnte nicht gespeichert werden.");
@@ -43,16 +55,16 @@ export default function NewValuationPage() {
       const valuation = await createValuation(user.id, {
         property_id:              property.id,
         rent_residential:         +valuationForm.rent_residential || 0,
-        rent_commercial:          +valuationForm.rent_commercial || 0,
+        rent_commercial:          +valuationForm.rent_commercial  || 0,
         rent_residential_actual:  valuationForm.rent_residential_actual ? +valuationForm.rent_residential_actual : null,
         rent_commercial_actual:   valuationForm.rent_commercial_actual  ? +valuationForm.rent_commercial_actual  : null,
         actual_rent:              null,
-        vacancy_rate:             +valuationForm.vacancy_rate || 0,
-        vacancy_avg5y:            +valuationForm.vacancy_avg5y || 0,
-        operating_costs:          +valuationForm.operating_costs || 0,
-        maintenance_costs:        +valuationForm.maintenance_costs || 0,
-        aap_count:                +valuationForm.aap_count || 0,
-        ehp_count:                +valuationForm.ehp_count || 0,
+        vacancy_rate:             +valuationForm.vacancy_rate     || 0,
+        vacancy_avg5y:            +valuationForm.vacancy_avg5y    || 0,
+        operating_costs:          +valuationForm.operating_costs  || 0,
+        maintenance_costs:        +valuationForm.maintenance_costs|| 0,
+        aap_count:                +valuationForm.aap_count        || 0,
+        ehp_count:                +valuationForm.ehp_count        || 0,
         micro_location:           valuationForm.micro_location,
         macro_location:           valuationForm.macro_location,
         public_transport:         valuationForm.public_transport,
@@ -67,8 +79,8 @@ export default function NewValuationPage() {
         base_cap_rate:            result.capRateBreakdown.base,
         condition_delta:          result.capRateBreakdown.conditionDelta,
         commercial_surcharge:     result.capRateBreakdown.commercialSurcharge,
-        micro_correction:         result.capRateBreakdown.microCorrection,
-        oev_correction:           result.capRateBreakdown.oevCorrection,
+        micro_correction:         result.capRateBreakdown.microDelta,
+        oev_correction:           result.capRateBreakdown.oevDelta,
         location_category:        result.locationCategory,
         confidence:               result.confidence,
         notes:                    valuationForm.notes || null,
@@ -105,7 +117,7 @@ export default function NewValuationPage() {
       <main className="max-w-2xl mx-auto px-4 py-10 pb-20">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Neue Bewertung</h1>
-          <p className="text-gray-400 text-sm">Erfassen Sie das Objekt Schritt für Schritt.</p>
+          <p className="text-gray-400 text-sm">Erfassen Sie das Objekt Schritt fuer Schritt.</p>
         </div>
 
         {error && (

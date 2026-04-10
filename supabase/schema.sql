@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS public.properties (
   num_units    INTEGER,
   living_area  NUMERIC(10,2),
   commercial_area NUMERIC(10,2),
+  commercial_units INTEGER DEFAULT 0,
   -- Wohnungsraster (Anzahl pro Zimmerkategorie)
   units_1z     INTEGER DEFAULT 0,
   units_1_5z   INTEGER DEFAULT 0,

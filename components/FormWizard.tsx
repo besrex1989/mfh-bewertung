@@ -96,7 +96,7 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
     name: "", address: "", city: "", canton: "BE", zip: "",
     build_year: "", renov_year: "",
     condition: "stufe4", build_quality: "gut",
-    num_units: "", living_area: "", commercial_area: "0",
+    num_units: "", living_area: "", commercial_area: "0", commercial_units: "0",
     units_1z: "0", units_1_5z: "0", units_2z: "0", units_2_5z: "0",
     units_3z: "0", units_3_5z: "0", units_4z: "0", units_4_5z: "0",
     units_5z: "0", units_5plus: "0",
@@ -276,38 +276,52 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
           </div>
         )}
 
-        {/* ── STEP 1: WOHNUNGSRASTER (à la IAZI) ── */}
+        {/* ── STEP 1: WOHNUNGSRASTER + GEWERBE ── */}
         {step === 1 && (
           <div className="space-y-4">
-            <h2 className="text-2xl font-bold text-gray-900 mb-1">Wohnungsraster</h2>
-            <p className="text-gray-400 text-sm mb-5">Anzahl Wohnungen pro Zimmerkategorie (analog IAZI).</p>
+            <h2 className="text-2xl font-bold text-gray-900 mb-1">Wohnungen &amp; Gewerbe</h2>
+            <p className="text-gray-400 text-sm mb-5">Anzahl Wohnungen pro Zimmerkategorie und Gewerbeeinheiten.</p>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    {ZIMMER_TYPEN.map(z => (
-                      <th key={z} className="px-2 py-2 text-center text-xs font-semibold text-gray-500 uppercase">{z} Zi</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    {ZIMMER_KEYS.map((k, i) => (
-                      <td key={k} className="px-1 py-2">
-                        <input
-                          type="number"
-                          min="0"
-                          value={(property as any)[k]}
-                          onChange={e => updP(k, e.target.value)}
-                          className="w-full text-center input-field py-2 text-sm"
-                          placeholder="0"
-                        />
-                      </td>
-                    ))}
-                  </tr>
-                </tbody>
-              </table>
+            {/* Wohnungen - vertikal */}
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Wohnungen nach Zimmerzahl</p>
+              <div className="space-y-2">
+                {ZIMMER_TYPEN.map((z, i) => (
+                  <div key={z} className="flex items-center gap-3">
+                    <span className="w-16 text-sm text-gray-600 font-medium">{z} Zimmer</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={(property as any)[ZIMMER_KEYS[i]]}
+                      onChange={e => updP(ZIMMER_KEYS[i], e.target.value)}
+                      className="w-20 text-center input-field py-1.5 text-sm"
+                      placeholder="0"
+                    />
+                    {+(property as any)[ZIMMER_KEYS[i]] > 0 && (
+                      <span className="text-xs text-gray-400">{(property as any)[ZIMMER_KEYS[i]]} Whg</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Gewerbeeinheiten */}
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Gewerbeeinheiten</p>
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <span className="w-16 text-sm text-gray-600 font-medium">Anzahl</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={property.commercial_units ?? "0"}
+                    onChange={e => updP("commercial_units", e.target.value)}
+                    className="w-20 text-center input-field py-1.5 text-sm"
+                    placeholder="0"
+                  />
+                  <span className="text-xs text-gray-400">Gewerbeeinheiten (Laden, Buero, etc.)</span>
+                </div>
+              </div>
             </div>
 
             {/* Zusammenfassung */}
@@ -323,9 +337,15 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
                   Hinweis: Summe ({totalUnitsFromRaster}) weicht von Anzahl Wohnungen ({property.num_units}) ab.
                 </p>
               )}
+              {+(property.commercial_units ?? 0) > 0 && (
+                <div className="flex justify-between text-sm mt-2 pt-2 border-t border-gray-200">
+                  <span className="text-gray-500">Gewerbeeinheiten:</span>
+                  <span className="font-bold text-gray-700">{property.commercial_units}</span>
+                </div>
+              )}
             </div>
 
-            {/* Grössenverteilung visuell */}
+            {/* Verteilung visuell */}
             {totalUnitsFromRaster > 0 && (
               <div className="space-y-1.5">
                 <p className="text-xs text-gray-400 uppercase tracking-widest font-semibold">Verteilung</p>
@@ -335,11 +355,11 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
                   const pct = Math.round((count / totalUnitsFromRaster) * 100);
                   return (
                     <div key={z} className="flex items-center gap-2 text-xs">
-                      <span className="w-8 text-gray-500 text-right">{z} Zi</span>
+                      <span className="w-12 text-gray-500 text-right">{z} Zi</span>
                       <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
                         <div className="h-full bg-blue-500 rounded-full" style={{ width: `${pct}%` }} />
                       </div>
-                      <span className="w-16 text-gray-600">{count} Whg ({pct}%)</span>
+                      <span className="w-20 text-gray-600">{count} Whg ({pct}%)</span>
                     </div>
                   );
                 })}

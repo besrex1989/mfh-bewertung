@@ -58,7 +58,9 @@ export async function generateValuationPDF(
       `${valuation.properties?.city ?? ""}, ${valuation.properties?.canton ?? ""}`]
       .filter(Boolean).join("  |  ");
     page.drawText(addr.slice(0, 80), { x: ML, y: 786, size: 8, font: norm, color: rgb(0.7, 0.85, 1) });
-    page.drawText(`Erstellt: ${today}`, { x: MR - 60, y: 786, size: 8, font: norm, color: rgb(0.7, 0.85, 1) });
+    const erstelltText = `Erstellt: ${today}`;
+    const erstelltW = norm.widthOfTextAtSize(erstelltText, 8);
+    page.drawText(erstelltText, { x: MR - erstelltW, y: 786, size: 8, font: norm, color: rgb(0.7, 0.85, 1) });
   };
 
   drawHeader(page1);
@@ -77,7 +79,8 @@ export async function generateValuationPDF(
     if (shade) page.drawRectangle({ x: ML, y: yPos - 5, width: MR - ML, height: 14, color: C.bg });
     page.drawText(label, { x: ML + 6, y: yPos + 1, size: 8.5, font: norm, color: C.muted, maxWidth: 210 });
     const valColor = highlight === "blue" ? C.blue : highlight === "green" ? C.green : highlight === "red" ? C.red : C.text;
-    page.drawText(value, { x: MR - 4, y: yPos + 1, size: 8.5, font: bold, color: valColor, maxWidth: 160 });
+    const valWidth = bold.widthOfTextAtSize(value, 8.5);
+    page.drawText(value, { x: MR - 6 - valWidth, y: yPos + 1, size: 8.5, font: bold, color: valColor });
     return yPos - 14;
   };
 
@@ -131,8 +134,10 @@ export async function generateValuationPDF(
     y -= 3;
     page1.drawRectangle({ x: ML, y: y - 5, width: MR - ML, height: 14, color: rgb(0.93, 0.98, 0.93) });
     page1.drawText(`Parkplaetze: ${aap} AAP / ${ehp} EHP`, { x: ML + 6, y: y + 1, size: 8.5, font: norm, color: C.muted });
-    page1.drawText(formatCHF(valuation.effective_income - valuation.rent_residential - valuation.rent_commercial), {
-      x: MR - 4, y: y + 1, size: 8.5, font: bold, color: C.green,
+    const parkText = formatCHF(valuation.effective_income - valuation.rent_residential - valuation.rent_commercial);
+    const parkW = bold.widthOfTextAtSize(parkText, 8.5);
+    page1.drawText(parkText, {
+      x: MR - 6 - parkW, y: y + 1, size: 8.5, font: bold, color: C.green,
     });
     y -= 14;
   }
@@ -158,7 +163,8 @@ export async function generateValuationPDF(
       y -= 2;
       page1.drawRectangle({ x: ML, y: y - 5, width: MR - ML, height: 16, color: C.blueLight });
       page1.drawText(r[0], { x: ML + 6, y: y + 2, size: 8.5, font: bold, color: C.blueDark });
-      page1.drawText(r[1], { x: MR - 4, y: y + 2, size: 8.5, font: bold, color: C.blue });
+      const baseW = bold.widthOfTextAtSize(r[1], 8.5);
+      page1.drawText(r[1], { x: MR - 6 - baseW, y: y + 2, size: 8.5, font: bold, color: C.blue });
       y -= 18;
     } else {
       y = row(page1, r[0], r[1], i % 2 === 0, y);
@@ -167,9 +173,11 @@ export async function generateValuationPDF(
 
   // Finaler Satz
   y -= 3;
+  const finalCapText = formatPct(valuation.cap_rate);
+  const finalCapW = bold.widthOfTextAtSize(finalCapText, 11);
   page1.drawRectangle({ x: ML, y: y - 6, width: MR - ML, height: 20, color: C.blue });
   page1.drawText("Finaler Kapitalisierungssatz", { x: ML + 6, y: y + 5, size: 9, font: bold, color: C.white });
-  page1.drawText(formatPct(valuation.cap_rate), { x: MR - 4, y: y + 5, size: 11, font: bold, color: C.white });
+  page1.drawText(finalCapText, { x: MR - 6 - finalCapW, y: y + 5, size: 11, font: bold, color: C.white });
   y -= 26;
 
   // ── Bewertungsergebnis ──
@@ -193,11 +201,17 @@ export async function generateValuationPDF(
     y = row(page1, r[0], r[1], i % 2 === 0, y);
   });
 
-  // Substanzwert
+  // Substanzwert (aus Baujahr + Flaeche berechnen, da nicht in DB gespeichert)
   y -= 4;
+  const totalArea = (propAny.properties?.living_area ?? 0) + (propAny.properties?.commercial_area ?? 0);
+  const ageForSubstanz = buildYear ? new Date().getFullYear() - (renovYear ?? buildYear) : 30;
+  const depreciationRate = Math.min(ageForSubstanz * 0.01, 0.50);
+  const substanzValue = totalArea > 0 ? totalArea * 2800 * (1 - depreciationRate) : 0;
+  const substanzText = formatCHF(substanzValue);
+  const substanzW = bold.widthOfTextAtSize(substanzText, 8.5);
   page1.drawRectangle({ x: ML, y: y - 5, width: MR - ML, height: 14, color: rgb(0.94, 0.97, 0.94) });
   page1.drawText("Substanzwert (indikativ, ohne Landwert)", { x: ML + 6, y: y + 1, size: 8.5, font: norm, color: C.muted });
-  page1.drawText(formatCHF((cb as any).substanz_value ?? 0), { x: MR - 4, y: y + 1, size: 8.5, font: bold, color: C.green });
+  page1.drawText(substanzText, { x: MR - 6 - substanzW, y: y + 1, size: 8.5, font: bold, color: C.green });
   y -= 18;
 
   // Mietpotenzial
@@ -242,8 +256,10 @@ export async function generateValuationPDF(
     y2 -= 4;
     page2.drawRectangle({ x: ML, y: y2 - 6, width: MR - ML, height: 20, color: C.redBg });
     page2.drawRectangle({ x: ML, y: y2 - 6, width: 3, height: 20, color: C.red });
+    const renovTotalText = `${formatCHF(totalMin)} - ${formatCHF(totalMax)}`;
+    const renovTotalW = bold.widthOfTextAtSize(renovTotalText, 9);
     page2.drawText("Total Sanierungsbedarf (Bandbreite)", { x: ML + 10, y: y2 + 5, size: 9, font: bold, color: C.red });
-    page2.drawText(`${formatCHF(totalMin)} - ${formatCHF(totalMax)}`, { x: MR - 4, y: y2 + 5, size: 9, font: bold, color: C.red });
+    page2.drawText(renovTotalText, { x: MR - 6 - renovTotalW, y: y2 + 5, size: 9, font: bold, color: C.red });
     y2 -= 30;
 
     // Bereinigter Wert
@@ -257,7 +273,9 @@ export async function generateValuationPDF(
 
     // Footer Seite 2
     page2.drawText(`MFH Bewertung Schweiz  |  Erstellt: ${today}`, { x: ML, y: 20, size: 7, font: norm, color: C.muted });
-    page2.drawText("Seite 2 / 2", { x: MR - 30, y: 20, size: 7, font: norm, color: C.muted });
+    const footerText2 = "Seite 2 / 2";
+    const footerW2 = norm.widthOfTextAtSize(footerText2, 7);
+    page2.drawText(footerText2, { x: MR - footerW2, y: 20, size: 7, font: norm, color: C.muted });
   }
 
   // ── Disclaimer + Footer Seite 1 ──
@@ -268,7 +286,9 @@ export async function generateValuationPDF(
     page1.drawText(line, { x: ML + 6, y: 40 + (discLines.length - 1 - i) * 10, size: 7, font: norm, color: C.muted });
   });
   page1.drawText(`MFH Bewertung Schweiz  |  Erstellt: ${today}`, { x: ML, y: 20, size: 7, font: norm, color: C.muted });
-  page1.drawText("Seite 1 / " + (renovItems.length > 0 ? "2" : "1"), { x: MR - 30, y: 20, size: 7, font: norm, color: C.muted });
+  const footerText1 = "Seite 1 / " + (renovItems.length > 0 ? "2" : "1");
+  const footerW1 = norm.widthOfTextAtSize(footerText1, 7);
+  page1.drawText(footerText1, { x: MR - footerW1, y: 20, size: 7, font: norm, color: C.muted });
 
   return doc.save();
 }

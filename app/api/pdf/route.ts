@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
   const { data: valuationData, error } = await supabase
     .from("valuations")
-    .select("*, properties(name, address, city, canton)")
+    .select("*, properties(*)")
     .eq("id", id)
     .single();
 

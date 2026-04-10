@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { ValuationWithProperty, Profile } from "@/types";
-import { formatCHF, formatPct, getLageLabel, getConditionLabel, buildScenarios, CONDITION_OPTIONS, QUALITY_OPTIONS, estimateRenovationNeeds } from "@/lib/calculations";
+import { formatCHF, formatPct, getLageLabel, getConditionLabel, buildScenarios, CONDITION_OPTIONS, QUALITY_OPTIONS, estimateRenovationNeeds, calcParkingIncome } from "@/lib/calculations";
 import type { LocationCategory } from "@/types";
 
 const C = {
@@ -14,6 +14,7 @@ const C = {
   amber:     rgb(0.85, 0.55, 0.10),
   amberBg:   rgb(1.0,  0.97, 0.88),
   green:     rgb(0.10, 0.55, 0.25),
+  greenBg:   rgb(0.93, 0.98, 0.93),
   red:       rgb(0.80, 0.15, 0.15),
   redBg:     rgb(1.0,  0.95, 0.95),
   gray:      rgb(0.90, 0.92, 0.94),
@@ -43,28 +44,28 @@ export async function generateValuationPDF(
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const norm = await doc.embedFont(StandardFonts.Helvetica);
 
-  const W = 595, ML = 40, MR = 555;
+  const W = 595, H = 842, ML = 40, MR = 555;
   const today = new Date().toLocaleDateString("de-CH");
+  const prop = (valuation as any).properties ?? {};
 
-  // ── Seite 1 ─────────────────────────────────────────
-  const page1 = doc.addPage([W, 842]);
-  let y = 802;
-
+  // ── Helper functions ───────────────────────────────────
   const drawHeader = (page: any) => {
     page.drawRectangle({ x: 0, y: 762, width: W, height: 80, color: C.blue });
     page.drawText("INDIKATIVER BEWERTUNGSBERICHT MFH", { x: ML, y: 822, size: 8, font: bold, color: rgb(0.7, 0.85, 1) });
     page.drawText("Mehrfamilienhaus Schweiz", { x: ML, y: 804, size: 16, font: bold, color: C.white });
-    const addr = [valuation.properties?.name, valuation.properties?.address,
-      `${valuation.properties?.city ?? ""}, ${valuation.properties?.canton ?? ""}`]
-      .filter(Boolean).join("  |  ");
+    const addr = [prop.name, prop.address, `${prop.city ?? ""}, ${prop.canton ?? ""}`].filter(Boolean).join("  |  ");
     page.drawText(addr.slice(0, 80), { x: ML, y: 786, size: 8, font: norm, color: rgb(0.7, 0.85, 1) });
     const erstelltText = `Erstellt: ${today}`;
     const erstelltW = norm.widthOfTextAtSize(erstelltText, 8);
     page.drawText(erstelltText, { x: MR - erstelltW, y: 786, size: 8, font: norm, color: rgb(0.7, 0.85, 1) });
   };
 
-  drawHeader(page1);
-  y = 750;
+  const drawFooter = (page: any, pageNum: number, totalPages: number) => {
+    page.drawText(`MFH Bewertung Schweiz  |  Erstellt: ${today}`, { x: ML, y: 20, size: 7, font: norm, color: C.muted });
+    const ft = `Seite ${pageNum} / ${totalPages}`;
+    const fw = norm.widthOfTextAtSize(ft, 7);
+    page.drawText(ft, { x: MR - fw, y: 20, size: 7, font: norm, color: C.muted });
+  };
 
   const section = (page: any, title: string, yPos: number): number => {
     yPos -= 8;
@@ -77,12 +78,47 @@ export async function generateValuationPDF(
   const row = (page: any, label: string, value: string, shade: boolean, yPos: number, highlight?: string): number => {
     if (yPos < 60) return yPos;
     if (shade) page.drawRectangle({ x: ML, y: yPos - 5, width: MR - ML, height: 14, color: C.bg });
-    page.drawText(label, { x: ML + 6, y: yPos + 1, size: 8.5, font: norm, color: C.muted, maxWidth: 210 });
-    const valColor = highlight === "blue" ? C.blue : highlight === "green" ? C.green : highlight === "red" ? C.red : C.text;
+    page.drawText(label, { x: ML + 6, y: yPos + 1, size: 8.5, font: norm, color: C.muted, maxWidth: 260 });
+    const valColor = highlight === "blue" ? C.blue : highlight === "green" ? C.green : highlight === "red" ? C.red : highlight === "amber" ? C.amber : C.text;
     const valWidth = bold.widthOfTextAtSize(value, 8.5);
     page.drawText(value, { x: MR - 6 - valWidth, y: yPos + 1, size: 8.5, font: bold, color: valColor });
     return yPos - 14;
   };
+
+  const rightText = (page: any, text: string, yPos: number, size: number, font: any, color: any) => {
+    const w = font.widthOfTextAtSize(text, size);
+    page.drawText(text, { x: MR - 6 - w, y: yPos, size, font, color });
+  };
+
+  // ── Extract property data ──────────────────────────────
+  const buildYear = prop.build_year;
+  const renovYear = prop.renov_year;
+  const buildQuality = prop.build_quality ?? "gut";
+  const condition = prop.condition ?? "stufe4";
+  const numUnits = prop.num_units ?? 0;
+  const livingArea = prop.living_area ?? 0;
+  const commercialArea = prop.commercial_area ?? 0;
+  const aap = (valuation as any).aap_count ?? 0;
+  const ehp = (valuation as any).ehp_count ?? 0;
+  const istW = (valuation as any).rent_residential_actual;
+  const istG = (valuation as any).rent_commercial_actual;
+  const vacancyAvg5y = (valuation as any).vacancy_avg5y ?? 0;
+  const locationCategory = (valuation.location_category as LocationCategory) ?? "durchschnitt";
+
+  // Wohnungsraster
+  const ZIMMER_LABELS = ["1 Zi", "1.5 Zi", "2 Zi", "2.5 Zi", "3 Zi", "3.5 Zi", "4 Zi", "4.5 Zi", "5 Zi", "5+ Zi"];
+  const ZIMMER_KEYS = ["units_1z","units_1_5z","units_2z","units_2_5z","units_3z","units_3_5z","units_4z","units_4_5z","units_5z","units_5plus"];
+  const unitCounts = ZIMMER_KEYS.map(k => prop[k] ?? 0);
+  const totalFromRaster = unitCounts.reduce((s: number, v: number) => s + v, 0);
+  const hasRaster = totalFromRaster > 0;
+
+  // Parkplatz-Ertrag
+  const parkingIncome = calcParkingIncome(aap, ehp, locationCategory);
+
+  // ── Seite 1 ─────────────────────────────────────────────
+  const page1 = doc.addPage([W, H]);
+  drawHeader(page1);
+  let y = 750;
 
   // ── Makler ──
   if (profile?.full_name || profile?.company) {
@@ -92,63 +128,114 @@ export async function generateValuationPDF(
     if (profile.phone)     y = row(page1, "Telefon",     profile.phone,     false, y);
   }
 
-  // ── Objekt ──
+  // ── 1. Objekt ──
   y = section(page1, "1. OBJEKTUEBERSICHT", y);
-  y = row(page1, "Bezeichnung", valuation.properties?.name ?? "—", false, y);
-  y = row(page1, "Adresse",     valuation.properties?.address ?? "—", true, y);
-  y = row(page1, "Ort",         `${valuation.properties?.city ?? ""}, ${valuation.properties?.canton ?? ""}`, false, y);
+  y = row(page1, "Bezeichnung", prop.name ?? "—", false, y);
+  y = row(page1, "Adresse",     `${prop.address ?? ""}, ${prop.zip ?? ""} ${prop.city ?? ""}`, true, y);
+  y = row(page1, "Kanton",      prop.canton ?? "—", false, y);
 
-  const propAny = valuation as any;
-  const buildYear = propAny.properties?.build_year;
-  const renovYear = propAny.properties?.renov_year;
-  const buildQuality = propAny.properties?.build_quality ?? "gut";
-  const condition = propAny.properties?.condition ?? "stufe4";
-
-  if (buildYear) y = row(page1, "Baujahr", `${buildYear}${renovYear ? ` / Sanierung ${renovYear}` : ""}`, true, y);
-  y = row(page1, "Zustand",     getConditionLabel(condition), false, y);
+  if (buildYear) {
+    const yearText = renovYear ? `${buildYear}  /  Sanierung ${renovYear}` : `${buildYear}`;
+    y = row(page1, "Baujahr / Sanierung", yearText, true, y);
+  }
+  y = row(page1, "Zustand",      getConditionLabel(condition), false, y);
   y = row(page1, "Bauqualitaet", QUALITY_OPTIONS.find(o => o.value === buildQuality)?.label ?? buildQuality, true, y);
-  y = row(page1, "Erfasst am",  new Date(valuation.created_at).toLocaleDateString("de-CH"), false, y);
 
-  // ── Ertraege ──
-  y = section(page1, "2. ERTRAGSDATEN", y);
-  y = row(page1, "Soll-Mietertrag Wohnen p.a.",  formatCHF(valuation.rent_residential), false, y);
-  y = row(page1, "Soll-Mietertrag Gewerbe p.a.", formatCHF(valuation.rent_commercial),  true,  y);
-
-  const istW = propAny.rent_residential_actual;
-  const istG = propAny.rent_commercial_actual;
-  if (istW || istG) {
-    y = row(page1, "Ist-Mietertrag Wohnen p.a.",  istW ? formatCHF(istW) : "= Soll", false, y);
-    y = row(page1, "Ist-Mietertrag Gewerbe p.a.", istG ? formatCHF(istG) : "= Soll", true,  y);
+  if (numUnits > 0) y = row(page1, "Anzahl Wohnungen", `${numUnits}`, false, y);
+  if (livingArea > 0 || commercialArea > 0) {
+    const areaText = commercialArea > 0 ? `${livingArea} m2 Wohnen  /  ${commercialArea} m2 Gewerbe` : `${livingArea} m2`;
+    y = row(page1, "Flaeche", areaText, true, y);
   }
 
-  y = row(page1, "Brutto-Sollertrag",       formatCHF(valuation.gross_income),     false, y);
-  y = row(page1, "Effektiver Jahresertrag", formatCHF(valuation.effective_income),  true,  y);
-  y = row(page1, "Leerstandsquote",         `${valuation.vacancy_rate} %`,          false, y);
-  if (propAny.vacancy_avg5y > 0) y = row(page1, "Leerstand Ø 5 Jahre", `${propAny.vacancy_avg5y} %`, true, y);
-  if (valuation.operating_costs > 0)   y = row(page1, "Betriebskosten p.a.",   formatCHF(valuation.operating_costs),   false, y);
-  if (valuation.maintenance_costs > 0) y = row(page1, "Unterhaltskosten p.a.", formatCHF(valuation.maintenance_costs), true,  y);
-
-  const aap = propAny.aap_count ?? 0;
-  const ehp = propAny.ehp_count ?? 0;
-  if (aap > 0 || ehp > 0) {
+  // Wohnungsraster (kompakt)
+  if (hasRaster) {
     y -= 3;
-    page1.drawRectangle({ x: ML, y: y - 5, width: MR - ML, height: 14, color: rgb(0.93, 0.98, 0.93) });
-    page1.drawText(`Parkplaetze: ${aap} AAP / ${ehp} EHP`, { x: ML + 6, y: y + 1, size: 8.5, font: norm, color: C.muted });
-    const parkText = formatCHF(valuation.effective_income - valuation.rent_residential - valuation.rent_commercial);
-    const parkW = bold.widthOfTextAtSize(parkText, 8.5);
-    page1.drawText(parkText, {
-      x: MR - 6 - parkW, y: y + 1, size: 8.5, font: bold, color: C.green,
+    page1.drawRectangle({ x: ML, y: y - 5, width: MR - ML, height: 14, color: C.blueLight });
+    page1.drawText("Wohnungsraster:", { x: ML + 6, y: y + 1, size: 8, font: bold, color: C.blueDark });
+    const rasterParts: string[] = [];
+    unitCounts.forEach((count: number, i: number) => {
+      if (count > 0) rasterParts.push(`${count}x ${ZIMMER_LABELS[i]}`);
     });
+    const rasterText = rasterParts.join("  |  ");
+    const rasterW = norm.widthOfTextAtSize(rasterText, 8);
+    page1.drawText(rasterText, { x: MR - 6 - rasterW, y: y + 1, size: 8, font: norm, color: C.blueDark });
     y -= 14;
   }
 
-  // ── Kap-Satz Herleitung ──
+  y = row(page1, "Erfasst am", new Date(valuation.created_at).toLocaleDateString("de-CH"), false, y);
+
+  // ── 2. Ertragsdaten ──
+  y = section(page1, "2. ERTRAGSDATEN", y);
+
+  // Soll-Ertraege
+  y = row(page1, "Soll-Mietertrag Wohnen p.a.",  formatCHF(valuation.rent_residential), false, y);
+  if (valuation.rent_commercial > 0) {
+    y = row(page1, "Soll-Mietertrag Gewerbe p.a.", formatCHF(valuation.rent_commercial), true, y);
+  }
+
+  // Ist-Ertraege (wenn vorhanden)
+  if (istW || istG) {
+    y = row(page1, "Ist-Mietertrag Wohnen p.a.",  istW ? formatCHF(istW) : "= Soll", false, y);
+    if (valuation.rent_commercial > 0 || istG) {
+      y = row(page1, "Ist-Mietertrag Gewerbe p.a.", istG ? formatCHF(istG) : "= Soll", true, y);
+    }
+  }
+
+  // Parkplaetze
+  if (aap > 0 || ehp > 0) {
+    y = row(page1, `Parkplaetze (${aap} AAP / ${ehp} EHP)`, formatCHF(parkingIncome) + " /Jahr", false, y, "green");
+  }
+
+  // Zusammenfassung Ertraege
+  y -= 2;
+  page1.drawRectangle({ x: ML, y: y - 5, width: MR - ML, height: 14, color: C.blueLight });
+  page1.drawText("Brutto-Sollertrag", { x: ML + 6, y: y + 1, size: 8.5, font: bold, color: C.blueDark });
+  rightText(page1, formatCHF(valuation.gross_income), y + 1, 8.5, bold, C.blue);
+  y -= 16;
+
+  y = row(page1, "Effektiver Jahresertrag", formatCHF(valuation.effective_income), false, y, "blue");
+
+  // Leerstand
+  y = row(page1, "Leerstandsquote aktuell", `${valuation.vacancy_rate} %`, true, y);
+  if (vacancyAvg5y > 0) y = row(page1, "Leerstand Ø 5 Jahre", `${vacancyAvg5y} %`, false, y);
+
+  // Kosten
+  y = row(page1, "Betriebskosten p.a.",   formatCHF(valuation.operating_costs),   true, y);
+  y = row(page1, "Unterhaltskosten p.a.", formatCHF(valuation.maintenance_costs), false, y);
+
+  // Netto-Ertrag
+  if (valuation.net_income && valuation.net_income > 0) {
+    y -= 2;
+    page1.drawRectangle({ x: ML, y: y - 5, width: MR - ML, height: 14, color: C.blueLight });
+    page1.drawText("Netto-Ertrag", { x: ML + 6, y: y + 1, size: 8.5, font: bold, color: C.blueDark });
+    rightText(page1, formatCHF(valuation.net_income), y + 1, 8.5, bold, C.blue);
+    y -= 16;
+  }
+
+  // Mietpotenzial
+  const sollIstW = valuation.rent_residential - (istW || valuation.rent_residential);
+  const sollIstG = valuation.rent_commercial  - (istG || valuation.rent_commercial);
+  if (sollIstW > 500 || sollIstG > 500) {
+    y -= 3;
+    page1.drawRectangle({ x: ML, y: y - 6, width: MR - ML, height: 22, color: C.amberBg });
+    page1.drawRectangle({ x: ML, y: y - 6, width: 3, height: 22, color: C.amber });
+    page1.drawText("Mietpotenzial bei Neuvermietung:", { x: ML + 10, y: y + 5, size: 8, font: bold, color: C.amber });
+    const potParts: string[] = [];
+    if (sollIstW > 500) potParts.push(`Wohnen +${formatCHF(sollIstW)}`);
+    if (sollIstG > 500) potParts.push(`Gewerbe +${formatCHF(sollIstG)}`);
+    const potText = potParts.join("  /  ");
+    const potW = bold.widthOfTextAtSize(potText, 8);
+    page1.drawText(potText, { x: MR - 6 - potW, y: y + 5, size: 8, font: bold, color: C.amber });
+    y -= 28;
+  }
+
+  // ── 3. Kap-Satz Herleitung ──
   y = section(page1, "3. KAPITALISIERUNGSSATZ-HERLEITUNG (IAZI-METHODIK)", y);
 
   const cb = valuation as any;
   const capRows = [
     ["Risikoloser Satz (Bundesobligationen)", formatPct(cb.base_cap_rate ? cb.base_cap_rate * 0.14 : 0.50)],
-    ["Marktpraemie (" + getLageLabel((valuation.location_category as LocationCategory) ?? "durchschnitt") + ")", formatPct(cb.base_cap_rate ? cb.base_cap_rate * 0.86 : 3.40)],
+    ["Marktpraemie (" + getLageLabel(locationCategory) + ")", formatPct(cb.base_cap_rate ? cb.base_cap_rate * 0.86 : 3.40)],
     ["= Basis-Kap.-Satz", formatPct(cb.base_cap_rate ?? 0)],
     ["Makrolage-Korrektur", formatPct(0)],
     ["Gebaeudezustand", `${(cb.condition_delta ?? 0) >= 0 ? "+" : ""}${formatPct(cb.condition_delta ?? 0)}`],
@@ -163,8 +250,7 @@ export async function generateValuationPDF(
       y -= 2;
       page1.drawRectangle({ x: ML, y: y - 5, width: MR - ML, height: 16, color: C.blueLight });
       page1.drawText(r[0], { x: ML + 6, y: y + 2, size: 8.5, font: bold, color: C.blueDark });
-      const baseW = bold.widthOfTextAtSize(r[1], 8.5);
-      page1.drawText(r[1], { x: MR - 6 - baseW, y: y + 2, size: 8.5, font: bold, color: C.blue });
+      rightText(page1, r[1], y + 2, 8.5, bold, C.blue);
       y -= 18;
     } else {
       y = row(page1, r[0], r[1], i % 2 === 0, y);
@@ -180,7 +266,7 @@ export async function generateValuationPDF(
   page1.drawText(finalCapText, { x: MR - 6 - finalCapW, y: y + 5, size: 11, font: bold, color: C.white });
   y -= 26;
 
-  // ── Bewertungsergebnis ──
+  // ── 4. Bewertungsergebnis ──
   y = section(page1, "4. BEWERTUNGSERGEBNIS", y);
 
   // Hauptwert
@@ -188,6 +274,13 @@ export async function generateValuationPDF(
   page1.drawRectangle({ x: ML, y: y - 8, width: 3, height: 38, color: C.blue });
   page1.drawText("Indikativer Marktwert (Ertragswert)", { x: ML + 10, y: y + 20, size: 8, font: bold, color: C.blueDark });
   page1.drawText(formatCHF(valuation.value_simple), { x: ML + 10, y: y + 5, size: 16, font: bold, color: C.blue });
+
+  // Preis pro m2 (rechts im Hauptwert-Block)
+  if (livingArea > 0) {
+    const priceM2 = Math.round(valuation.value_simple / (livingArea + commercialArea));
+    const m2Text = `${formatCHF(priceM2)} / m2`;
+    rightText(page1, m2Text, y + 5, 9, bold, C.blueDark);
+  }
   y -= 48;
 
   // Szenarien
@@ -201,81 +294,18 @@ export async function generateValuationPDF(
     y = row(page1, r[0], r[1], i % 2 === 0, y);
   });
 
-  // Substanzwert (aus Baujahr + Flaeche berechnen, da nicht in DB gespeichert)
+  // Substanzwert
   y -= 4;
-  const totalArea = (propAny.properties?.living_area ?? 0) + (propAny.properties?.commercial_area ?? 0);
+  const totalArea = livingArea + commercialArea;
   const ageForSubstanz = buildYear ? new Date().getFullYear() - (renovYear ?? buildYear) : 30;
   const depreciationRate = Math.min(ageForSubstanz * 0.01, 0.50);
   const substanzValue = totalArea > 0 ? totalArea * 2800 * (1 - depreciationRate) : 0;
-  const substanzText = formatCHF(substanzValue);
-  const substanzW = bold.widthOfTextAtSize(substanzText, 8.5);
-  page1.drawRectangle({ x: ML, y: y - 5, width: MR - ML, height: 14, color: rgb(0.94, 0.97, 0.94) });
-  page1.drawText("Substanzwert (indikativ, ohne Landwert)", { x: ML + 6, y: y + 1, size: 8.5, font: norm, color: C.muted });
-  page1.drawText(substanzText, { x: MR - 6 - substanzW, y: y + 1, size: 8.5, font: bold, color: C.green });
-  y -= 18;
-
-  // Mietpotenzial
-  const sollIstW = valuation.rent_residential - (istW || valuation.rent_residential);
-  const sollIstG = valuation.rent_commercial  - (istG || valuation.rent_commercial);
-  if (sollIstW > 500 || sollIstG > 500) {
-    y -= 4;
-    page1.drawRectangle({ x: ML, y: y - 8, width: MR - ML, height: 26, color: C.amberBg });
-    page1.drawRectangle({ x: ML, y: y - 8, width: 3, height: 26, color: C.amber });
-    page1.drawText("Mietpotenzial bei Neuvermietung", { x: ML + 10, y: y + 8, size: 9, font: bold, color: C.amber });
-    const lines = [];
-    if (sollIstW > 500) lines.push(`Wohnen: +${formatCHF(sollIstW)}/Jahr`);
-    if (sollIstG > 500) lines.push(`Gewerbe: +${formatCHF(sollIstG)}/Jahr`);
-    page1.drawText(lines.join("   "), { x: ML + 10, y: y - 2, size: 8, font: norm, color: C.amber, maxWidth: MR - ML - 20 });
-    y -= 36;
-  }
-
-  // ── Seite 2: Sanierungsbedarf ──
-  const renovItems = buildYear
-    ? estimateRenovationNeeds(buildYear, renovYear ?? null, (valuation as any).properties?.living_area ?? 0, condition)
-    : [];
-
-  if (renovItems.length > 0) {
-    const page2 = doc.addPage([W, 842]);
-    drawHeader(page2);
-    let y2 = 750;
-
-    y2 = section(page2, "5. GESCHAETZTER SANIERUNGSBEDARF (NAECHSTE 10 JAHRE)", y2);
-    y2 -= 4;
-    page2.drawText("Indikative Schaetzung basierend auf Baujahr, Sanierungsjahr und Zustand (analog IAZI-Methodik)", {
-      x: ML + 6, y: y2, size: 7.5, font: norm, color: C.muted, maxWidth: MR - ML - 12,
-    });
-    y2 -= 16;
-
-    let totalMin = 0, totalMax = 0;
-    renovItems.forEach((item, i) => {
-      totalMin += item.costMin;
-      totalMax += item.costMax;
-      y2 = row(page2, item.element, `${formatCHF(item.costMin)} - ${formatCHF(item.costMax)}`, i % 2 === 0, y2);
-    });
-
-    y2 -= 4;
-    page2.drawRectangle({ x: ML, y: y2 - 6, width: MR - ML, height: 20, color: C.redBg });
-    page2.drawRectangle({ x: ML, y: y2 - 6, width: 3, height: 20, color: C.red });
-    const renovTotalText = `${formatCHF(totalMin)} - ${formatCHF(totalMax)}`;
-    const renovTotalW = bold.widthOfTextAtSize(renovTotalText, 9);
-    page2.drawText("Total Sanierungsbedarf (Bandbreite)", { x: ML + 10, y: y2 + 5, size: 9, font: bold, color: C.red });
-    page2.drawText(renovTotalText, { x: MR - 6 - renovTotalW, y: y2 + 5, size: 9, font: bold, color: C.red });
-    y2 -= 30;
-
-    // Bereinigter Wert
-    const renovMid = (totalMin + totalMax) / 2;
-    y2 -= 4;
-    page2.drawRectangle({ x: ML, y: y2 - 8, width: MR - ML, height: 38, color: C.blueLight });
-    page2.drawRectangle({ x: ML, y: y2 - 8, width: 3, height: 38, color: C.blue });
-    page2.drawText("Bereinigter Marktwert (nach Sanierungsabzug)", { x: ML + 10, y: y2 + 20, size: 8, font: bold, color: C.blueDark });
-    page2.drawText(formatCHF(valuation.value_simple - renovMid), { x: ML + 10, y: y2 + 5, size: 16, font: bold, color: C.blue });
-    y2 -= 50;
-
-    // Footer Seite 2
-    page2.drawText(`MFH Bewertung Schweiz  |  Erstellt: ${today}`, { x: ML, y: 20, size: 7, font: norm, color: C.muted });
-    const footerText2 = "Seite 2 / 2";
-    const footerW2 = norm.widthOfTextAtSize(footerText2, 7);
-    page2.drawText(footerText2, { x: MR - footerW2, y: 20, size: 7, font: norm, color: C.muted });
+  if (substanzValue > 0) {
+    const substanzText = formatCHF(substanzValue);
+    page1.drawRectangle({ x: ML, y: y - 5, width: MR - ML, height: 14, color: C.greenBg });
+    page1.drawText("Substanzwert (indikativ, ohne Landwert)", { x: ML + 6, y: y + 1, size: 8.5, font: norm, color: C.muted });
+    rightText(page1, substanzText, y + 1, 8.5, bold, C.green);
+    y -= 18;
   }
 
   // ── Disclaimer + Footer Seite 1 ──
@@ -285,10 +315,70 @@ export async function generateValuationPDF(
   discLines.forEach((line, i) => {
     page1.drawText(line, { x: ML + 6, y: 40 + (discLines.length - 1 - i) * 10, size: 7, font: norm, color: C.muted });
   });
-  page1.drawText(`MFH Bewertung Schweiz  |  Erstellt: ${today}`, { x: ML, y: 20, size: 7, font: norm, color: C.muted });
-  const footerText1 = "Seite 1 / " + (renovItems.length > 0 ? "2" : "1");
-  const footerW1 = norm.widthOfTextAtSize(footerText1, 7);
-  page1.drawText(footerText1, { x: MR - footerW1, y: 20, size: 7, font: norm, color: C.muted });
+
+  // ── Seite 2: Sanierungsbedarf + Notizen ──
+  const renovItems = buildYear
+    ? estimateRenovationNeeds(buildYear, renovYear ?? null, livingArea, condition)
+    : [];
+  const hasNotes = !!valuation.notes;
+  const needsPage2 = renovItems.length > 0 || hasNotes;
+  const totalPages = needsPage2 ? 2 : 1;
+
+  drawFooter(page1, 1, totalPages);
+
+  if (needsPage2) {
+    const page2 = doc.addPage([W, H]);
+    drawHeader(page2);
+    let y2 = 750;
+
+    // Sanierungsbedarf
+    if (renovItems.length > 0) {
+      y2 = section(page2, "5. GESCHAETZTER SANIERUNGSBEDARF (NAECHSTE 10 JAHRE)", y2);
+      y2 -= 4;
+      page2.drawText("Indikative Schaetzung basierend auf Baujahr, Sanierungsjahr und Zustand (analog IAZI-Methodik)", {
+        x: ML + 6, y: y2, size: 7.5, font: norm, color: C.muted, maxWidth: MR - ML - 12,
+      });
+      y2 -= 16;
+
+      let totalMin = 0, totalMax = 0;
+      renovItems.forEach((item, i) => {
+        totalMin += item.costMin;
+        totalMax += item.costMax;
+        y2 = row(page2, item.element, `${formatCHF(item.costMin)} - ${formatCHF(item.costMax)}`, i % 2 === 0, y2);
+      });
+
+      y2 -= 4;
+      const renovTotalText = `${formatCHF(totalMin)} - ${formatCHF(totalMax)}`;
+      page2.drawRectangle({ x: ML, y: y2 - 6, width: MR - ML, height: 20, color: C.redBg });
+      page2.drawRectangle({ x: ML, y: y2 - 6, width: 3, height: 20, color: C.red });
+      page2.drawText("Total Sanierungsbedarf (Bandbreite)", { x: ML + 10, y: y2 + 5, size: 9, font: bold, color: C.red });
+      rightText(page2, renovTotalText, y2 + 5, 9, bold, C.red);
+      y2 -= 30;
+
+      // Bereinigter Wert
+      const renovMid = (totalMin + totalMax) / 2;
+      y2 -= 4;
+      page2.drawRectangle({ x: ML, y: y2 - 8, width: MR - ML, height: 38, color: C.blueLight });
+      page2.drawRectangle({ x: ML, y: y2 - 8, width: 3, height: 38, color: C.blue });
+      page2.drawText("Bereinigter Marktwert (nach Sanierungsabzug)", { x: ML + 10, y: y2 + 20, size: 8, font: bold, color: C.blueDark });
+      page2.drawText(formatCHF(valuation.value_simple - renovMid), { x: ML + 10, y: y2 + 5, size: 16, font: bold, color: C.blue });
+      y2 -= 50;
+    }
+
+    // Notizen / Bemerkungen
+    if (hasNotes) {
+      y2 = section(page2, "6. NOTIZEN / BEMERKUNGEN", y2);
+      y2 -= 4;
+      const noteLines = splitText(valuation.notes!, 90);
+      noteLines.forEach(line => {
+        if (y2 < 60) return;
+        page2.drawText(line, { x: ML + 6, y: y2, size: 8.5, font: norm, color: C.text, maxWidth: MR - ML - 12 });
+        y2 -= 12;
+      });
+    }
+
+    drawFooter(page2, 2, totalPages);
+  }
 
   return doc.save();
 }

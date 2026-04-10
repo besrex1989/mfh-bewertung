@@ -8,6 +8,7 @@ import { calculateValuation, formatCHF, formatPct, CONDITION_OPTIONS, QUALITY_OP
 import ResultCard from "@/components/ResultCard";
 import PDFDownloadButton from "@/components/PDFDownloadButton";
 import { MUNICIPALITIES, KANTONE } from "@/lib/municipalities";
+import AddressSearch from "@/components/AddressSearch";
 import type { LocationRating } from "@/types";
 
 export default function ValuationDetailPage() {
@@ -295,6 +296,17 @@ export default function ValuationDetailPage() {
             {activeTab === "objekt" && (
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2"><Inp label="Bezeichnung" k="name" source="p" type="text" /></div>
+                <div className="col-span-2">
+                  <AddressSearch
+                    initialValue={propForm.address}
+                    onSelect={r => {
+                      updP("address", r.street);
+                      updP("zip", r.zip);
+                      updP("city", r.city);
+                      updP("canton", r.canton.toUpperCase());
+                    }}
+                  />
+                </div>
                 <Inp label="Strasse / Nr." k="address" source="p" type="text" />
                 <Inp label="PLZ" k="zip" source="p" type="text" />
                 <div>

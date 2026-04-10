@@ -4,6 +4,7 @@ import { useState } from "react";
 import { MUNICIPALITIES, KANTONE } from "@/lib/municipalities";
 import { calculateValuation, CONDITION_OPTIONS, QUALITY_OPTIONS, LOCATION_INFO, formatCHF, formatPct } from "@/lib/calculations";
 import type { LocationRating, ValuationResult } from "@/types";
+import AddressSearch from "@/components/AddressSearch";
 
 interface FormWizardProps {
   onComplete: (property: any, valuation: any, result: ValuationResult) => Promise<void>;
@@ -187,18 +188,28 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
 
             <FField label="Bezeichnung *" value={property.name} onChange={v => updP("name", v)} error={errors.name} type="text" placeholder="z. B. MFH Musterstrasse" />
 
-            <div className="grid grid-cols-2 gap-3">
+            <AddressSearch
+              initialValue={property.address}
+              onSelect={r => {
+                updP("address", r.street);
+                updP("zip", r.zip);
+                updP("city", r.city);
+                updP("canton", r.canton.toUpperCase());
+                // Auto-set name if empty
+                if (!property.name) updP("name", `MFH ${r.street}`);
+              }}
+            />
+
+            <div className="grid grid-cols-3 gap-3">
               <FField label="Strasse / Nr. *" value={property.address} onChange={v => updP("address", v)} error={errors.address} type="text" placeholder="Musterstrasse 12" />
               <FField label="PLZ" value={property.zip} onChange={v => updP("zip", v)} type="text" placeholder="3006" />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
               <div>
                 <FField label="Ort / Gemeinde *" value={property.city} onChange={v => updP("city", v)} error={errors.city} type="text" placeholder="Bern" list="city-list" />
                 <datalist id="city-list">{MUNICIPALITIES.map(m => <option key={m.name} value={m.name} />)}</datalist>
               </div>
-              <FSel label="Kanton" value={property.canton} onChange={v => updP("canton", v)} options={KANTONE.map(k => ({ value: k, label: k }))} />
             </div>
+
+            <FSel label="Kanton" value={property.canton} onChange={v => updP("canton", v)} options={KANTONE.map(k => ({ value: k, label: k }))} />
 
             {/* Baujahr + Sanierung */}
             <div className="grid grid-cols-2 gap-3">

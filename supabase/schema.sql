@@ -55,10 +55,23 @@ CREATE TABLE IF NOT EXISTS public.properties (
   canton       TEXT NOT NULL,
   zip          TEXT,
   build_year   INTEGER,
-  condition    TEXT CHECK (condition IN ('sehr_gut','gut','mittel','renovations')),
+  renov_year   INTEGER,
+  build_quality TEXT DEFAULT 'gut',
+  condition    TEXT CHECK (condition IN ('stufe1','stufe2','stufe3','stufe4','stufe5','stufe6')),
   num_units    INTEGER,
   living_area  NUMERIC(10,2),
   commercial_area NUMERIC(10,2),
+  -- Wohnungsraster (Anzahl pro Zimmerkategorie)
+  units_1z     INTEGER DEFAULT 0,
+  units_1_5z   INTEGER DEFAULT 0,
+  units_2z     INTEGER DEFAULT 0,
+  units_2_5z   INTEGER DEFAULT 0,
+  units_3z     INTEGER DEFAULT 0,
+  units_3_5z   INTEGER DEFAULT 0,
+  units_4z     INTEGER DEFAULT 0,
+  units_4_5z   INTEGER DEFAULT 0,
+  units_5z     INTEGER DEFAULT 0,
+  units_5plus  INTEGER DEFAULT 0,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -79,10 +92,15 @@ CREATE TABLE IF NOT EXISTS public.valuations (
   -- Ertragsdaten
   rent_residential  NUMERIC(14,2) NOT NULL DEFAULT 0,
   rent_commercial   NUMERIC(14,2) NOT NULL DEFAULT 0,
+  rent_residential_actual NUMERIC(14,2),
+  rent_commercial_actual  NUMERIC(14,2),
   actual_rent       NUMERIC(14,2),
   vacancy_rate      NUMERIC(5,2)  NOT NULL DEFAULT 0,
+  vacancy_avg5y     NUMERIC(5,2)  NOT NULL DEFAULT 0,
   operating_costs   NUMERIC(14,2) NOT NULL DEFAULT 0,
   maintenance_costs NUMERIC(14,2) NOT NULL DEFAULT 0,
+  aap_count         INTEGER NOT NULL DEFAULT 0,
+  ehp_count         INTEGER NOT NULL DEFAULT 0,
 
   -- Lagefaktoren
   micro_location    TEXT CHECK (micro_location IN ('sehr_gut','gut','mittel','schwach')),

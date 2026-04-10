@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { MUNICIPALITIES, KANTONE } from "@/lib/municipalities";
+import { MUNICIPALITIES, KANTONE, lookupMunicipality } from "@/lib/municipalities";
 import { calculateValuation, CONDITION_OPTIONS, QUALITY_OPTIONS, LOCATION_INFO, formatCHF, formatPct } from "@/lib/calculations";
-import type { LocationRating, ValuationResult } from "@/types";
+import type { LocationRating, ValuationResult, Municipality } from "@/types";
 import AddressSearch from "@/components/AddressSearch";
 
 interface FormWizardProps {
@@ -90,6 +90,7 @@ function FSel({ label, value, onChange, options, info }: {
 export default function FormWizard({ onComplete, saving }: FormWizardProps) {
   const [step, setStep] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [dynamicMuni, setDynamicMuni] = useState<Municipality | null>(null);
 
   const [property, setProperty] = useState({
     name: "", address: "", city: "", canton: "BE", zip: "",
@@ -195,8 +196,11 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
                 updP("zip", r.zip);
                 updP("city", r.city);
                 updP("canton", r.canton.toUpperCase());
-                // Auto-set name if empty
                 if (!property.name) updP("name", `MFH ${r.street}`);
+                // Gemeinde dynamisch nachschlagen (Einwohnerzahl)
+                lookupMunicipality(r.city, r.canton.toUpperCase()).then(m => {
+                  if (m) setDynamicMuni(m);
+                });
               }}
             />
 
@@ -257,12 +261,17 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
             </div>
 
             {property.city && (() => {
-              const m = MUNICIPALITIES.find(x => x.name.toLowerCase() === property.city.toLowerCase());
+              const m = MUNICIPALITIES.find(x => x.name.toLowerCase() === property.city.toLowerCase()) ?? dynamicMuni;
+              const lageLabels: Record<string, string> = { sehrStark: "Sehr stark", gut: "Gut", durchschnitt: "Durchschnittlich", sekundaer: "Sekundaer" };
               return m ? (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-xs text-blue-700">
-                  <strong>Auto-Lageklasse:</strong> {m.type} - {m.name}, {m.canton} ({m.population.toLocaleString("de-CH")} Einw.)
+                  <strong>Gemeinde-Info:</strong> {m.name}, {m.canton} · {m.population.toLocaleString("de-CH")} Einwohner · {m.type} · Lageklasse: <strong>{lageLabels[m.locationClass]}</strong>
                 </div>
-              ) : null;
+              ) : (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-xs text-gray-500">
+                  Gemeinde &quot;{property.city}&quot; nicht in Datenbank. Einwohnerzahl wird beim Speichern ermittelt.
+                </div>
+              );
             })()}
           </div>
         )}
@@ -472,7 +481,8 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
             </div>
 
             {property.city && (() => {
-              const m = MUNICIPALITIES.find(x => x.name.toLowerCase() === property.city.toLowerCase());
+              const m = MUNICIPALITIES.find(x => x.name.toLowerCase() === property.city.toLowerCase()) ?? dynamicMuni;
+              const lageLabels: Record<string, string> = { sehrStark: "Sehr stark", gut: "Gut", durchschnitt: "Durchschnittlich", sekundaer: "Sekundaer" };
               return (
                 <div className={`rounded-xl p-4 border ${m ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200"}`}>
                   <p className="text-[10px] font-semibold uppercase tracking-widest mb-2 text-blue-600">Gemeinde-Klassifikation</p>
@@ -480,7 +490,7 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
                     <div><span className="text-gray-500">Gemeinde:</span> <strong>{property.city}</strong></div>
                     <div><span className="text-gray-500">Typ:</span> <strong>{m?.type ?? "Nicht in DB"}</strong></div>
                     {m && <div><span className="text-gray-500">Bevoelkerung:</span> <strong>{m.population.toLocaleString("de-CH")}</strong></div>}
-                    {m && <div><span className="text-gray-500">Auto-Lage:</span> <strong className="text-blue-600">{["Sehr stark","Gut","Durchschnittlich","Sekundaer"][["sehrStark","gut","durchschnitt","sekundaer"].indexOf(m.locationClass)]}</strong></div>}
+                    {m && <div><span className="text-gray-500">Auto-Lage:</span> <strong className="text-blue-600">{lageLabels[m.locationClass]}</strong></div>}
                   </div>
                 </div>
               );

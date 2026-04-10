@@ -69,6 +69,8 @@ export default function ValuationDetailPage() {
         macro_location:           data.macro_location ?? "gut",
         public_transport:         data.public_transport ?? "gut",
         notes:                    data.notes ?? "",
+        pros:                     data.pros ?? "",
+        cons:                     data.cons ?? "",
       });
 
       recompute(data, data.properties);
@@ -162,6 +164,8 @@ export default function ValuationDetailPage() {
       macro_location:          valForm.macro_location,
       public_transport:        valForm.public_transport,
       notes:                   valForm.notes || null,
+      pros:                    valForm.pros || null,
+      cons:                    valForm.cons || null,
       cap_rate:                r.capRateBreakdown.final,
       gross_income:            r.grossIncome,
       effective_income:        r.effectiveIncome,
@@ -349,10 +353,24 @@ export default function ValuationDetailPage() {
             )}
 
             {activeTab === "lage" && (
-              <div className="grid grid-cols-2 gap-4">
-                <Sel label="Mikrolage"     k="micro_location"   source="v" options={locationOpts} />
-                <Sel label="Makrolage"     k="macro_location"   source="v" options={locationOpts} />
-                <Sel label="OeV-Anbindung" k="public_transport" source="v" options={locationOpts} />
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <Sel label="Mikrolage"     k="micro_location"   source="v" options={locationOpts} />
+                  <Sel label="Makrolage"     k="macro_location"   source="v" options={locationOpts} />
+                  <Sel label="OeV-Anbindung" k="public_transport" source="v" options={locationOpts} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Wertsteigernde Faktoren</label>
+                    <textarea value={valForm.pros} onChange={e => updV("pros", e.target.value)}
+                      className="input-field resize-none text-green-700" rows={3} placeholder="Positive Aspekte..." />
+                  </div>
+                  <div>
+                    <label className="label">Wertmindernde Faktoren</label>
+                    <textarea value={valForm.cons} onChange={e => updV("cons", e.target.value)}
+                      className="input-field resize-none text-red-600" rows={3} placeholder="Negative Aspekte / Risiken..." />
+                  </div>
+                </div>
               </div>
             )}
 
@@ -375,6 +393,25 @@ export default function ValuationDetailPage() {
             livingArea={property?.living_area ?? undefined}
             condition={property?.condition ?? undefined}
           />
+        )}
+
+        {(valuation.pros || valuation.cons) && !editing && (
+          <div className="card mt-5">
+            <div className="grid grid-cols-2 gap-6">
+              {valuation.pros && (
+                <div>
+                  <h4 className="text-xs font-semibold text-green-600 uppercase tracking-widest mb-2">Wertsteigernde Faktoren</h4>
+                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{valuation.pros}</p>
+                </div>
+              )}
+              {valuation.cons && (
+                <div>
+                  <h4 className="text-xs font-semibold text-red-500 uppercase tracking-widest mb-2">Wertmindernde Faktoren</h4>
+                  <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{valuation.cons}</p>
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
         {valuation.notes && !editing && (

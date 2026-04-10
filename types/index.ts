@@ -76,6 +76,8 @@ export interface Valuation {
   location_category:     string | null;
   confidence:            ConfidenceLevel | null;
   notes:                 string | null;
+  pros:                  string | null;
+  cons:                  string | null;
   scenario:              string | null;
   created_at:            string;
   updated_at:            string;

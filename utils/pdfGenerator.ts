@@ -283,15 +283,38 @@ export async function generateValuationPDF(
   }
   y -= 48;
 
-  // Szenarien
-  y -= 4;
+  // Szenarien mit visuellen Balken
+  y -= 6;
   const bw = 0.30;
-  [
-    ["Konservativ  (+" + bw.toFixed(2) + "%)", formatCHF(valuation.value_conservative)],
-    ["Neutral      (" + formatPct(valuation.cap_rate) + ")",  formatCHF(valuation.value_simple)],
-    ["Optimistisch (-" + bw.toFixed(2) + "%)", formatCHF(valuation.value_optimistic)],
-  ].forEach((r, i) => {
-    y = row(page1, r[0], r[1], i % 2 === 0, y);
+  const valMin = valuation.value_conservative;
+  const valMax = valuation.value_optimistic;
+  const valRange = valMax - valMin;
+  const barLeft = ML + 6;
+  const barRight = MR - 6;
+  const barWidth = barRight - barLeft;
+
+  const scenarios = [
+    { label: "Konservativ", sub: `+${bw.toFixed(2)}%`, value: valuation.value_conservative, color: C.muted },
+    { label: "Neutral",     sub: formatPct(valuation.cap_rate), value: valuation.value_simple, color: C.blue },
+    { label: "Optimistisch", sub: `-${bw.toFixed(2)}%`, value: valuation.value_optimistic, color: C.green },
+  ];
+
+  // Skalenbalken-Hintergrund
+  page1.drawRectangle({ x: barLeft, y: y - 2, width: barWidth, height: 6, color: C.gray });
+  // Farbverlauf: Konservativ->Neutral->Optimistisch
+  page1.drawRectangle({ x: barLeft, y: y - 2, width: barWidth, height: 6, color: rgb(0.85, 0.92, 1.0) });
+
+  scenarios.forEach(s => {
+    if (valRange <= 0) return;
+    const xPos = barLeft + ((s.value - valMin) / valRange) * barWidth;
+    // Marker
+    page1.drawRectangle({ x: xPos - 1, y: y - 4, width: 2, height: 10, color: s.color });
+  });
+  y -= 10;
+
+  // Szenario-Werte als Zeilen
+  scenarios.forEach((s, i) => {
+    y = row(page1, `${s.label}  (${s.sub})`, formatCHF(s.value), i % 2 === 0, y);
   });
 
   // Substanzwert
@@ -306,6 +329,39 @@ export async function generateValuationPDF(
     page1.drawText("Substanzwert (indikativ, ohne Landwert)", { x: ML + 6, y: y + 1, size: 8.5, font: norm, color: C.muted });
     rightText(page1, substanzText, y + 1, 8.5, bold, C.green);
     y -= 18;
+  }
+
+  // Wertsteigernde / Wertmindernde Faktoren
+  const pros = (valuation as any).pros;
+  const cons = (valuation as any).cons;
+  if (pros || cons) {
+    y -= 4;
+    const halfW = (MR - ML - 10) / 2;
+
+    if (pros) {
+      page1.drawRectangle({ x: ML, y: y - 4, width: halfW, height: 14, color: C.greenBg });
+      page1.drawText("Wertsteigernde Faktoren", { x: ML + 4, y: y + 2, size: 7, font: bold, color: C.green });
+      y -= 14;
+      const prosLines = splitText(pros, 42);
+      prosLines.forEach(line => {
+        if (y < 60) return;
+        page1.drawText("+ " + line, { x: ML + 4, y: y, size: 7.5, font: norm, color: C.green });
+        y -= 10;
+      });
+    }
+
+    if (cons) {
+      if (pros) y -= 4;
+      page1.drawRectangle({ x: ML, y: y - 4, width: halfW, height: 14, color: C.redBg });
+      page1.drawText("Wertmindernde Faktoren", { x: ML + 4, y: y + 2, size: 7, font: bold, color: C.red });
+      y -= 14;
+      const consLines = splitText(cons, 42);
+      consLines.forEach(line => {
+        if (y < 60) return;
+        page1.drawText("- " + line, { x: ML + 4, y: y, size: 7.5, font: norm, color: C.red });
+        y -= 10;
+      });
+    }
   }
 
   // ── Disclaimer + Footer Seite 1 ──

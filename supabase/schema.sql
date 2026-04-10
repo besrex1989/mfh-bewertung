@@ -128,8 +128,10 @@ CREATE TABLE IF NOT EXISTS public.valuations (
   location_category TEXT,
   confidence        TEXT CHECK (confidence IN ('High','Medium','Low')),
 
-  -- Notizen
+  -- Notizen & Wertfaktoren
   notes             TEXT,
+  pros              TEXT,
+  cons              TEXT,
   scenario          TEXT DEFAULT 'neutral',
 
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),

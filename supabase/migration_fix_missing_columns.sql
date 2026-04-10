@@ -53,4 +53,6 @@ ALTER TABLE public.valuations
   ADD COLUMN IF NOT EXISTS rent_commercial_actual  NUMERIC(14,2),
   ADD COLUMN IF NOT EXISTS vacancy_avg5y           NUMERIC(5,2) NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS aap_count               INTEGER NOT NULL DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS ehp_count               INTEGER NOT NULL DEFAULT 0;
+  ADD COLUMN IF NOT EXISTS ehp_count               INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS pros                    TEXT,
+  ADD COLUMN IF NOT EXISTS cons                    TEXT;

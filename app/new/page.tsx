@@ -84,6 +84,8 @@ export default function NewValuationPage() {
         location_category:        result.locationCategory,
         confidence:               result.confidence,
         notes:                    valuationForm.notes || null,
+        pros:                     valuationForm.pros || null,
+        cons:                     valuationForm.cons || null,
         scenario:                 "neutral",
       });
 

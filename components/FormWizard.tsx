@@ -110,6 +110,8 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
     macro_location: "gut" as LocationRating,
     public_transport: "gut" as LocationRating,
     notes: "",
+    pros: "",
+    cons: "",
   });
 
   const updP = (k: string, v: string) => setProperty(p => ({ ...p, [k]: v }));
@@ -435,6 +437,21 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
             <div className="grid grid-cols-2 gap-3">
               <FSel label="OeV-Anbindung" value={valuation.public_transport} onChange={v => updV("public_transport", v)} options={locationOpts} info={LOCATION_INFO.oev} />
               <div />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Wertsteigernde Faktoren</label>
+                <textarea value={valuation.pros} onChange={e => updV("pros", e.target.value)}
+                  className="input-field resize-none text-green-700" rows={3} placeholder="z. B. zentrale Lage, Minergie, Lift, Balkon, guter Ausbaustandard..." />
+                <p className="text-xs text-gray-400 mt-1">Positive Aspekte der Liegenschaft</p>
+              </div>
+              <div>
+                <label className="label">Wertmindernde Faktoren</label>
+                <textarea value={valuation.cons} onChange={e => updV("cons", e.target.value)}
+                  className="input-field resize-none text-red-600" rows={3} placeholder="z. B. Laermbelastung, fehlende Isolation, Sanierungsstau, Altlasten..." />
+                <p className="text-xs text-gray-400 mt-1">Negative Aspekte / Risiken</p>
+              </div>
             </div>
 
             <div>

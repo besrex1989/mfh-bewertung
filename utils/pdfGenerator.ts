@@ -266,25 +266,49 @@ export async function generateValuationPDF(
   page1.drawText(finalCapText, { x: MR - 6 - finalCapW, y: y + 5, size: 11, font: bold, color: C.white });
   y -= 26;
 
+  // ── Disclaimer + Footer Seite 1 ──
+  const disc = "Rechtlicher Hinweis: Indikative Schaetzung, ersetzt keine vollstaendige Verkehrswertschaetzung. Alle Angaben ohne Gewaehr.";
+  const discLines = splitText(disc, 100);
+  page1.drawRectangle({ x: ML, y: 35, width: MR - ML, height: discLines.length * 10 + 8, color: C.bg });
+  discLines.forEach((line, i) => {
+    page1.drawText(line, { x: ML + 6, y: 40 + (discLines.length - 1 - i) * 10, size: 7, font: norm, color: C.muted });
+  });
+
+  // ── Seite 2: Bewertungsergebnis ──────────────────────────
+  const renovItems = buildYear
+    ? estimateRenovationNeeds(buildYear, renovYear ?? null, livingArea, condition)
+    : [];
+  const hasNotes = !!valuation.notes;
+  const pros = (valuation as any).pros;
+  const cons = (valuation as any).cons;
+  const needsPage3 = renovItems.length > 0 || hasNotes;
+  const totalPages = needsPage3 ? 3 : 2;
+
+  drawFooter(page1, 1, totalPages);
+
+  const page2 = doc.addPage([W, H]);
+  drawHeader(page2);
+  let y2 = 750;
+
   // ── 4. Bewertungsergebnis ──
-  y = section(page1, "4. BEWERTUNGSERGEBNIS", y);
+  y2 = section(page2, "4. BEWERTUNGSERGEBNIS", y2);
 
   // Hauptwert
-  page1.drawRectangle({ x: ML, y: y - 8, width: MR - ML, height: 38, color: C.blueLight });
-  page1.drawRectangle({ x: ML, y: y - 8, width: 3, height: 38, color: C.blue });
-  page1.drawText("Indikativer Marktwert (Ertragswert)", { x: ML + 10, y: y + 20, size: 8, font: bold, color: C.blueDark });
-  page1.drawText(formatCHF(valuation.value_simple), { x: ML + 10, y: y + 5, size: 16, font: bold, color: C.blue });
+  page2.drawRectangle({ x: ML, y: y2 - 8, width: MR - ML, height: 38, color: C.blueLight });
+  page2.drawRectangle({ x: ML, y: y2 - 8, width: 3, height: 38, color: C.blue });
+  page2.drawText("Indikativer Marktwert (Ertragswert)", { x: ML + 10, y: y2 + 20, size: 8, font: bold, color: C.blueDark });
+  page2.drawText(formatCHF(valuation.value_simple), { x: ML + 10, y: y2 + 5, size: 16, font: bold, color: C.blue });
 
-  // Preis pro m2 (rechts im Hauptwert-Block)
+  // Preis pro m2
   if (livingArea > 0) {
     const priceM2 = Math.round(valuation.value_simple / (livingArea + commercialArea));
     const m2Text = `${formatCHF(priceM2)} / m2`;
-    rightText(page1, m2Text, y + 5, 9, bold, C.blueDark);
+    rightText(page2, m2Text, y2 + 5, 9, bold, C.blueDark);
   }
-  y -= 48;
+  y2 -= 48;
 
   // Szenarien mit visuellen Balken
-  y -= 6;
+  y2 -= 6;
   const bw = 0.30;
   const valMin = valuation.value_conservative;
   const valMax = valuation.value_optimistic;
@@ -299,141 +323,118 @@ export async function generateValuationPDF(
     { label: "Optimistisch", sub: `-${bw.toFixed(2)}%`, value: valuation.value_optimistic, color: C.green },
   ];
 
-  // Skalenbalken-Hintergrund
-  page1.drawRectangle({ x: barLeft, y: y - 2, width: barWidth, height: 6, color: C.gray });
-  // Farbverlauf: Konservativ->Neutral->Optimistisch
-  page1.drawRectangle({ x: barLeft, y: y - 2, width: barWidth, height: 6, color: rgb(0.85, 0.92, 1.0) });
-
+  // Skalenbalken
+  page2.drawRectangle({ x: barLeft, y: y2 - 2, width: barWidth, height: 6, color: rgb(0.85, 0.92, 1.0) });
   scenarios.forEach(s => {
     if (valRange <= 0) return;
     const xPos = barLeft + ((s.value - valMin) / valRange) * barWidth;
-    // Marker
-    page1.drawRectangle({ x: xPos - 1, y: y - 4, width: 2, height: 10, color: s.color });
+    page2.drawRectangle({ x: xPos - 1, y: y2 - 4, width: 2, height: 10, color: s.color });
   });
-  y -= 10;
+  y2 -= 10;
 
-  // Szenario-Werte als Zeilen
+  // Szenario-Werte
   scenarios.forEach((s, i) => {
-    y = row(page1, `${s.label}  (${s.sub})`, formatCHF(s.value), i % 2 === 0, y);
+    y2 = row(page2, `${s.label}  (${s.sub})`, formatCHF(s.value), i % 2 === 0, y2);
   });
 
   // Substanzwert
-  y -= 4;
+  y2 -= 4;
   const totalArea = livingArea + commercialArea;
   const ageForSubstanz = buildYear ? new Date().getFullYear() - (renovYear ?? buildYear) : 30;
   const depreciationRate = Math.min(ageForSubstanz * 0.01, 0.50);
   const substanzValue = totalArea > 0 ? totalArea * 2800 * (1 - depreciationRate) : 0;
   if (substanzValue > 0) {
     const substanzText = formatCHF(substanzValue);
-    page1.drawRectangle({ x: ML, y: y - 5, width: MR - ML, height: 14, color: C.greenBg });
-    page1.drawText("Substanzwert (indikativ, ohne Landwert)", { x: ML + 6, y: y + 1, size: 8.5, font: norm, color: C.muted });
-    rightText(page1, substanzText, y + 1, 8.5, bold, C.green);
-    y -= 18;
+    page2.drawRectangle({ x: ML, y: y2 - 5, width: MR - ML, height: 14, color: C.greenBg });
+    page2.drawText("Substanzwert (indikativ, ohne Landwert)", { x: ML + 6, y: y2 + 1, size: 8.5, font: norm, color: C.muted });
+    rightText(page2, substanzText, y2 + 1, 8.5, bold, C.green);
+    y2 -= 18;
   }
 
   // Wertsteigernde / Wertmindernde Faktoren
-  const pros = (valuation as any).pros;
-  const cons = (valuation as any).cons;
   if (pros || cons) {
-    y -= 4;
-    const halfW = (MR - ML - 10) / 2;
-
+    y2 -= 8;
     if (pros) {
-      page1.drawRectangle({ x: ML, y: y - 4, width: halfW, height: 14, color: C.greenBg });
-      page1.drawText("Wertsteigernde Faktoren", { x: ML + 4, y: y + 2, size: 7, font: bold, color: C.green });
-      y -= 14;
-      const prosLines = splitText(pros, 42);
+      page2.drawRectangle({ x: ML, y: y2 - 4, width: MR - ML, height: 14, color: C.greenBg });
+      page2.drawText("Wertsteigernde Faktoren", { x: ML + 4, y: y2 + 2, size: 7, font: bold, color: C.green });
+      y2 -= 14;
+      const prosLines = splitText(pros, 85);
       prosLines.forEach(line => {
-        if (y < 60) return;
-        page1.drawText("+ " + line, { x: ML + 4, y: y, size: 7.5, font: norm, color: C.green });
-        y -= 10;
+        if (y2 < 60) return;
+        page2.drawText("+ " + line, { x: ML + 4, y: y2, size: 7.5, font: norm, color: C.green });
+        y2 -= 10;
       });
+      y2 -= 4;
     }
 
     if (cons) {
-      if (pros) y -= 4;
-      page1.drawRectangle({ x: ML, y: y - 4, width: halfW, height: 14, color: C.redBg });
-      page1.drawText("Wertmindernde Faktoren", { x: ML + 4, y: y + 2, size: 7, font: bold, color: C.red });
-      y -= 14;
-      const consLines = splitText(cons, 42);
+      page2.drawRectangle({ x: ML, y: y2 - 4, width: MR - ML, height: 14, color: C.redBg });
+      page2.drawText("Wertmindernde Faktoren", { x: ML + 4, y: y2 + 2, size: 7, font: bold, color: C.red });
+      y2 -= 14;
+      const consLines = splitText(cons, 85);
       consLines.forEach(line => {
-        if (y < 60) return;
-        page1.drawText("- " + line, { x: ML + 4, y: y, size: 7.5, font: norm, color: C.red });
-        y -= 10;
+        if (y2 < 60) return;
+        page2.drawText("- " + line, { x: ML + 4, y: y2, size: 7.5, font: norm, color: C.red });
+        y2 -= 10;
       });
     }
   }
 
-  // ── Disclaimer + Footer Seite 1 ──
-  const disc = "Rechtlicher Hinweis: Indikative Schaetzung, ersetzt keine vollstaendige Verkehrswertschaetzung. Alle Angaben ohne Gewaehr.";
-  const discLines = splitText(disc, 100);
-  page1.drawRectangle({ x: ML, y: 35, width: MR - ML, height: discLines.length * 10 + 8, color: C.bg });
-  discLines.forEach((line, i) => {
-    page1.drawText(line, { x: ML + 6, y: 40 + (discLines.length - 1 - i) * 10, size: 7, font: norm, color: C.muted });
-  });
+  drawFooter(page2, 2, totalPages);
 
-  // ── Seite 2: Sanierungsbedarf + Notizen ──
-  const renovItems = buildYear
-    ? estimateRenovationNeeds(buildYear, renovYear ?? null, livingArea, condition)
-    : [];
-  const hasNotes = !!valuation.notes;
-  const needsPage2 = renovItems.length > 0 || hasNotes;
-  const totalPages = needsPage2 ? 2 : 1;
-
-  drawFooter(page1, 1, totalPages);
-
-  if (needsPage2) {
-    const page2 = doc.addPage([W, H]);
-    drawHeader(page2);
-    let y2 = 750;
+  // ── Seite 3: Sanierungsbedarf + Notizen ──
+  if (needsPage3) {
+    const page3 = doc.addPage([W, H]);
+    drawHeader(page3);
+    let y3 = 750;
 
     // Sanierungsbedarf
     if (renovItems.length > 0) {
-      y2 = section(page2, "5. GESCHAETZTER SANIERUNGSBEDARF (NAECHSTE 10 JAHRE)", y2);
-      y2 -= 4;
-      page2.drawText("Indikative Schaetzung basierend auf Baujahr, Sanierungsjahr und Zustand (analog IAZI-Methodik)", {
-        x: ML + 6, y: y2, size: 7.5, font: norm, color: C.muted, maxWidth: MR - ML - 12,
+      y3 = section(page3, "5. GESCHAETZTER SANIERUNGSBEDARF (NAECHSTE 10 JAHRE)", y3);
+      y3 -= 4;
+      page3.drawText("Indikative Schaetzung basierend auf Baujahr, Sanierungsjahr und Zustand (analog IAZI-Methodik)", {
+        x: ML + 6, y: y3, size: 7.5, font: norm, color: C.muted, maxWidth: MR - ML - 12,
       });
-      y2 -= 16;
+      y3 -= 16;
 
       let totalMin = 0, totalMax = 0;
       renovItems.forEach((item, i) => {
         totalMin += item.costMin;
         totalMax += item.costMax;
-        y2 = row(page2, item.element, `${formatCHF(item.costMin)} - ${formatCHF(item.costMax)}`, i % 2 === 0, y2);
+        y3 = row(page3, item.element, `${formatCHF(item.costMin)} - ${formatCHF(item.costMax)}`, i % 2 === 0, y3);
       });
 
-      y2 -= 4;
+      y3 -= 4;
       const renovTotalText = `${formatCHF(totalMin)} - ${formatCHF(totalMax)}`;
-      page2.drawRectangle({ x: ML, y: y2 - 6, width: MR - ML, height: 20, color: C.redBg });
-      page2.drawRectangle({ x: ML, y: y2 - 6, width: 3, height: 20, color: C.red });
-      page2.drawText("Total Sanierungsbedarf (Bandbreite)", { x: ML + 10, y: y2 + 5, size: 9, font: bold, color: C.red });
-      rightText(page2, renovTotalText, y2 + 5, 9, bold, C.red);
-      y2 -= 30;
+      page3.drawRectangle({ x: ML, y: y3 - 6, width: MR - ML, height: 20, color: C.redBg });
+      page3.drawRectangle({ x: ML, y: y3 - 6, width: 3, height: 20, color: C.red });
+      page3.drawText("Total Sanierungsbedarf (Bandbreite)", { x: ML + 10, y: y3 + 5, size: 9, font: bold, color: C.red });
+      rightText(page3, renovTotalText, y3 + 5, 9, bold, C.red);
+      y3 -= 30;
 
       // Bereinigter Wert
       const renovMid = (totalMin + totalMax) / 2;
-      y2 -= 4;
-      page2.drawRectangle({ x: ML, y: y2 - 8, width: MR - ML, height: 38, color: C.blueLight });
-      page2.drawRectangle({ x: ML, y: y2 - 8, width: 3, height: 38, color: C.blue });
-      page2.drawText("Bereinigter Marktwert (nach Sanierungsabzug)", { x: ML + 10, y: y2 + 20, size: 8, font: bold, color: C.blueDark });
-      page2.drawText(formatCHF(valuation.value_simple - renovMid), { x: ML + 10, y: y2 + 5, size: 16, font: bold, color: C.blue });
-      y2 -= 50;
+      y3 -= 4;
+      page3.drawRectangle({ x: ML, y: y3 - 8, width: MR - ML, height: 38, color: C.blueLight });
+      page3.drawRectangle({ x: ML, y: y3 - 8, width: 3, height: 38, color: C.blue });
+      page3.drawText("Bereinigter Marktwert (nach Sanierungsabzug)", { x: ML + 10, y: y3 + 20, size: 8, font: bold, color: C.blueDark });
+      page3.drawText(formatCHF(valuation.value_simple - renovMid), { x: ML + 10, y: y3 + 5, size: 16, font: bold, color: C.blue });
+      y3 -= 50;
     }
 
     // Notizen / Bemerkungen
     if (hasNotes) {
-      y2 = section(page2, "6. NOTIZEN / BEMERKUNGEN", y2);
-      y2 -= 4;
+      y3 = section(page3, "6. NOTIZEN / BEMERKUNGEN", y3);
+      y3 -= 4;
       const noteLines = splitText(valuation.notes!, 90);
       noteLines.forEach(line => {
-        if (y2 < 60) return;
-        page2.drawText(line, { x: ML + 6, y: y2, size: 8.5, font: norm, color: C.text, maxWidth: MR - ML - 12 });
-        y2 -= 12;
+        if (y3 < 60) return;
+        page3.drawText(line, { x: ML + 6, y: y3, size: 8.5, font: norm, color: C.text, maxWidth: MR - ML - 12 });
+        y3 -= 12;
       });
     }
 
-    drawFooter(page2, 2, totalPages);
+    drawFooter(page3, 3, totalPages);
   }
 
   return doc.save();

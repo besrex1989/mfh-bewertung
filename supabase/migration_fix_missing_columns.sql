@@ -19,6 +19,12 @@ ALTER TABLE public.properties
   ADD COLUMN IF NOT EXISTS units_5z     INTEGER DEFAULT 0,
   ADD COLUMN IF NOT EXISTS units_5plus  INTEGER DEFAULT 0;
 
+-- Bestehende condition-Werte auf neues stufe-Format konvertieren
+UPDATE public.properties SET condition = 'stufe5' WHERE condition = 'sehr_gut';
+UPDATE public.properties SET condition = 'stufe4' WHERE condition = 'gut';
+UPDATE public.properties SET condition = 'stufe3' WHERE condition = 'mittel';
+UPDATE public.properties SET condition = 'stufe2' WHERE condition = 'renovations';
+
 -- Condition CHECK-Constraint aktualisieren (stufe1-stufe6 statt sehr_gut/gut/mittel/renovations)
 ALTER TABLE public.properties DROP CONSTRAINT IF EXISTS properties_condition_check;
 ALTER TABLE public.properties

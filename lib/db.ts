@@ -27,7 +27,7 @@ export async function getProperty(id: string): Promise<Property | null> {
 
 export async function createProperty(userId: string, property: Omit<Property, "id" | "user_id" | "created_at" | "updated_at">): Promise<Property | null> {
   const { data, error } = await supabase.from("properties").insert({ ...property, user_id: userId }).select().single();
-  if (error) { console.error("createProperty:", error); return null; }
+  if (error) { console.error("createProperty:", error); throw new Error(`Objekt-Fehler: ${error.message} (${error.code})`); }
   return data as Property;
 }
 
@@ -65,7 +65,7 @@ export async function getValuation(id: string): Promise<ValuationWithProperty | 
 
 export async function createValuation(userId: string, valuation: Omit<Valuation, "id" | "user_id" | "created_at" | "updated_at">): Promise<Valuation | null> {
   const { data, error } = await supabase.from("valuations").insert({ ...valuation, user_id: userId }).select().single();
-  if (error) { console.error("createValuation:", error); return null; }
+  if (error) { console.error("createValuation:", error); throw new Error(`Bewertungs-Fehler: ${error.message} (${error.code})`); }
   return data as Valuation;
 }
 

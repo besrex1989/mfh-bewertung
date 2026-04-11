@@ -32,7 +32,6 @@ export type Database = {
           num_units:       number | null;
           living_area:     number | null;
           commercial_area: number | null;
-          commercial_units: number | null;
           units_1z:        number | null;
           units_1_5z:      number | null;
           units_2z:        number | null;

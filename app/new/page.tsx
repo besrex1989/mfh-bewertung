@@ -38,7 +38,6 @@ export default function NewValuationPage() {
         num_units:       propertyForm.num_units   ? +propertyForm.num_units   : null,
         living_area:     propertyForm.living_area ? +propertyForm.living_area : null,
         commercial_area: propertyForm.commercial_area ? +propertyForm.commercial_area : null,
-        commercial_units: propertyForm.commercial_units ? +propertyForm.commercial_units : 0,
         units_1z:    +propertyForm.units_1z    || 0,
         units_1_5z:  +propertyForm.units_1_5z  || 0,
         units_2z:    +propertyForm.units_2z    || 0,

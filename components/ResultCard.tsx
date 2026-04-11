@@ -200,18 +200,27 @@ export default function ResultCard({ result, effectiveIncome, buildYear, renovYe
         </div>
       )}
 
-      {/* ── SANIERUNGSBEDARF (à la IAZI) ── */}
+      {/* ── SANIERUNGSBEDARF (verbessert) ── */}
       {renovItems.length > 0 && (
         <div className="card">
           <h4 className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-1">
             Geschaetzter Sanierungsbedarf (naechste 10 Jahre)
           </h4>
-          <p className="text-xs text-gray-400 mb-4">Indikative Schaetzung basierend auf Baujahr und Zustand</p>
+          <p className="text-xs text-gray-400 mb-4">Basierend auf Baujahr, Sanierungsjahr, Zustand und Bauteil-Lebensdauer</p>
           <div className="space-y-2">
             {renovItems.map(item => (
-              <div key={item.element} className="flex justify-between py-1.5 border-b border-gray-100 last:border-0">
-                <span className="text-sm text-gray-600">{item.element}</span>
-                <span className="text-sm font-semibold text-gray-700">
+              <div key={item.element} className="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0 gap-2">
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm text-gray-600">{item.element}</span>
+                  <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                    item.urgency === "high" ? "bg-red-100 text-red-600" :
+                    item.urgency === "medium" ? "bg-amber-100 text-amber-600" :
+                    "bg-gray-100 text-gray-500"
+                  }`}>
+                    {item.urgency === "high" ? "Dringend" : item.urgency === "medium" ? "Mittelfristig" : "Langfristig"}
+                  </span>
+                </div>
+                <span className="text-sm font-semibold text-gray-700 flex-shrink-0">
                   {formatCHF(item.costMin)} – {formatCHF(item.costMax)}
                 </span>
               </div>

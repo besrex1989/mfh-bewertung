@@ -396,7 +396,7 @@ export async function generateValuationPDF(
 
     if (renovItems.length > 0) {
       y3 = sectionTitle(p3, "Geschaetzter Sanierungsbedarf (naechste 10 Jahre)", y3);
-      p3.drawText("Indikative Schaetzung basierend auf Baujahr, Sanierungsjahr und Zustand (analog IAZI-Methodik)", {
+      p3.drawText("Basierend auf Baujahr, Sanierungsjahr, Zustand und Bauteil-Lebensdauer", {
         x: ML, y: y3, size: 7.5, font: norm, color: C.light,
       });
       y3 -= 14;
@@ -405,7 +405,9 @@ export async function generateValuationPDF(
       renovItems.forEach(item => {
         totMin += item.costMin;
         totMax += item.costMax;
-        y3 = dataRow(p3, item.element, `${formatCHF(item.costMin)} – ${formatCHF(item.costMax)}`, y3);
+        const urgLabel = item.urgency === "high" ? " [Dringend]" : item.urgency === "medium" ? " [Mittelfr.]" : "";
+        const urgColor = item.urgency === "high" ? C.red : item.urgency === "medium" ? C.amber : undefined;
+        y3 = dataRow(p3, `${item.element}${urgLabel}`, `${formatCHF(item.costMin)} – ${formatCHF(item.costMax)}`, y3, urgColor ? { color: urgColor } : undefined);
       });
 
       // Total

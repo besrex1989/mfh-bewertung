@@ -185,11 +185,57 @@ export function calcParkingIncome(aap: number, ehp: number, loc: LocationCategor
   return (aap * r.aap + ehp * r.ehp) * 12;
 }
 
-// ── Sanierungsbedarf-Schätzung (analog IAZI) ───────────────
+// ── Sanierungsbedarf-Schätzung (verbessert, analog IAZI) ────
 export interface RenovationItem {
   element: string;
   costMin: number;
   costMax: number;
+  urgency: "none" | "low" | "medium" | "high";
+  note: string;
+}
+
+// Lebensdauer-Tabelle pro Bauteil (Jahre bis Erneuerung fällig)
+const ELEMENT_LIFECYCLE: {
+  element: string;
+  lifespan: number;           // Typische Lebensdauer in Jahren
+  costPerM2Min: number;       // CHF pro m2 Gesamtfläche (Min)
+  costPerM2Max: number;       // CHF pro m2 Gesamtfläche (Max)
+}[] = [
+  { element: "Dach / Dachdämmung",       lifespan: 35, costPerM2Min: 80,  costPerM2Max: 130 },
+  { element: "Fassade und Storen",       lifespan: 30, costPerM2Min: 120, costPerM2Max: 200 },
+  { element: "Fenster und Türen",        lifespan: 30, costPerM2Min: 90,  costPerM2Max: 150 },
+  { element: "Heizung / Technik",        lifespan: 20, costPerM2Min: 60,  costPerM2Max: 100 },
+  { element: "Sanitär / Rohrleitungen",  lifespan: 40, costPerM2Min: 55,  costPerM2Max: 90  },
+  { element: "Elektroinstallationen",    lifespan: 35, costPerM2Min: 50,  costPerM2Max: 80  },
+  { element: "Küchen",                   lifespan: 25, costPerM2Min: 100, costPerM2Max: 180 },
+  { element: "Bäder / Nasszellen",       lifespan: 25, costPerM2Min: 110, costPerM2Max: 190 },
+  { element: "Innenausbau / Bodenbeläge", lifespan: 20, costPerM2Min: 60,  costPerM2Max: 100 },
+];
+
+// Zustandsfaktor: wie stark der Zustand die Kosten beeinflusst
+const CONDITION_COST_FACTOR: Record<string, number> = {
+  stufe6: 0.0,   // Hervorragend → kein Bedarf
+  stufe5: 0.0,   // Sehr gut → kein Bedarf
+  stufe4: 0.6,   // Gut → reduzierter Bedarf
+  stufe3: 0.85,  // Mittel → fast voller Bedarf
+  stufe2: 1.0,   // Eher schlecht → voller Bedarf
+  stufe1: 1.15,  // Schlecht → erhöhter Bedarf (Mehrkosten)
+};
+
+function getUrgency(remainingLife: number): "none" | "low" | "medium" | "high" {
+  if (remainingLife > 15) return "none";
+  if (remainingLife > 5)  return "low";
+  if (remainingLife > 0)  return "medium";
+  return "high"; // Lebensdauer überschritten
+}
+
+function getUrgencyNote(urgency: "none" | "low" | "medium" | "high"): string {
+  switch (urgency) {
+    case "none":   return "Kein Handlungsbedarf absehbar";
+    case "low":    return "Innerhalb 10–15 Jahren";
+    case "medium": return "Innerhalb 5–10 Jahren";
+    case "high":   return "Kurzfristig / überfällig";
+  }
 }
 
 export function estimateRenovationNeeds(
@@ -200,23 +246,43 @@ export function estimateRenovationNeeds(
 ): RenovationItem[] {
   const effectiveYear = renovYear ?? buildYear;
   const age = new Date().getFullYear() - effectiveYear;
-  const areaFactor = Math.max(livingArea / 500, 0.5); // normiert auf 500m²
+  const totalArea = Math.max(livingArea, 200); // Mindestfläche 200m2
 
-  if (age <= 10 || condition === "stufe6" || condition === "stufe5") return [];
+  // Kein Bedarf bei Neubau oder hervorragendem Zustand
+  const condFactor = CONDITION_COST_FACTOR[condition] ?? 0.85;
+  if (condFactor <= 0 || age <= 5) return [];
 
-  const base = age > 30 ? 1.0 : 0.5;
+  const items: RenovationItem[] = [];
 
-  return [
-    { element: "Dach",               costMin: Math.round(50000 * base * areaFactor), costMax: Math.round(80000 * base * areaFactor) },
-    { element: "Fassade und Storen", costMin: Math.round(80000 * base * areaFactor), costMax: Math.round(130000 * base * areaFactor) },
-    { element: "Fenster und Türen",  costMin: Math.round(60000 * base * areaFactor), costMax: Math.round(100000 * base * areaFactor) },
-    { element: "Heizung / Technik",  costMin: Math.round(40000 * base * areaFactor), costMax: Math.round(70000 * base * areaFactor) },
-    { element: "Rohrleitungen",      costMin: Math.round(40000 * base * areaFactor), costMax: Math.round(70000 * base * areaFactor) },
-    { element: "Elektrotechnik",     costMin: Math.round(40000 * base * areaFactor), costMax: Math.round(60000 * base * areaFactor) },
-    { element: "Küchen",             costMin: Math.round(80000 * base * areaFactor), costMax: Math.round(140000 * base * areaFactor) },
-    { element: "Bäder",              costMin: Math.round(80000 * base * areaFactor), costMax: Math.round(140000 * base * areaFactor) },
-    { element: "Innenausbau",        costMin: Math.round(50000 * base * areaFactor), costMax: Math.round(90000 * base * areaFactor) },
-  ];
+  for (const el of ELEMENT_LIFECYCLE) {
+    const remainingLife = el.lifespan - age;
+    const urgency = getUrgency(remainingLife);
+
+    // Element überspringen wenn noch >15 Jahre Restlebensdauer UND Zustand gut
+    if (urgency === "none" && condFactor < 0.85) continue;
+    if (urgency === "none") continue;
+
+    // Kosten = Fläche × CHF/m2 × Zustandsfaktor × Dringlichkeitsfaktor
+    const urgencyFactor = urgency === "high" ? 1.0 : urgency === "medium" ? 0.8 : 0.5;
+    const costMin = Math.round(el.costPerM2Min * totalArea * condFactor * urgencyFactor / 100) * 100;
+    const costMax = Math.round(el.costPerM2Max * totalArea * condFactor * urgencyFactor / 100) * 100;
+
+    if (costMin > 0) {
+      items.push({
+        element: el.element,
+        costMin,
+        costMax,
+        urgency,
+        note: getUrgencyNote(urgency),
+      });
+    }
+  }
+
+  // Sortieren: dringendste zuerst
+  const urgencyOrder = { high: 0, medium: 1, low: 2, none: 3 };
+  items.sort((a, b) => urgencyOrder[a.urgency] - urgencyOrder[b.urgency]);
+
+  return items;
 }
 
 // ── Input Interface ─────────────────────────────────────────

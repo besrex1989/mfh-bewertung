@@ -73,6 +73,8 @@ CREATE TABLE IF NOT EXISTS public.properties (
   units_4_5z   INTEGER DEFAULT 0,
   units_5z     INTEGER DEFAULT 0,
   units_5plus  INTEGER DEFAULT 0,
+  lat          NUMERIC(10,7),
+  lon          NUMERIC(10,7),
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

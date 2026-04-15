@@ -104,6 +104,7 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
     units_1z: "0", units_1_5z: "0", units_2z: "0", units_2_5z: "0",
     units_3z: "0", units_3_5z: "0", units_4z: "0", units_4_5z: "0",
     units_5z: "0", units_5plus: "0",
+    lat: null as number | null, lon: null as number | null,
   });
 
   const [valuation, setValuation] = useState({
@@ -201,8 +202,11 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
                 updP("city", r.city);
                 updP("canton", r.canton.toUpperCase());
                 if (!property.name) updP("name", `MFH ${r.street}`);
-                // Koordinaten fuer Karte
-                if (r.lat && r.lon) setCoords({ lat: r.lat, lon: r.lon });
+                // Koordinaten fuer Karte + Speicherung
+                if (r.lat && r.lon) {
+                  setCoords({ lat: r.lat, lon: r.lon });
+                  setProperty(p => ({ ...p, lat: r.lat!, lon: r.lon! }));
+                }
                 // Gemeinde dynamisch nachschlagen (Einwohnerzahl)
                 lookupMunicipality(r.city, r.canton.toUpperCase()).then(m => {
                   if (m) setDynamicMuni(m);

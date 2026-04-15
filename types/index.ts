@@ -38,6 +38,8 @@ export interface Property {
   units_4_5z:      number | null;
   units_5z:        number | null;
   units_5plus:     number | null;
+  lat:             number | null;
+  lon:             number | null;
   created_at:      string;
   updated_at:      string;
 }

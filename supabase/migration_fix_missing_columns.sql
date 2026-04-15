@@ -6,6 +6,8 @@
 
 -- ── PROPERTIES: Fehlende Spalten ────────────────────────────
 ALTER TABLE public.properties
+  ADD COLUMN IF NOT EXISTS lat           NUMERIC(10,7),
+  ADD COLUMN IF NOT EXISTS lon           NUMERIC(10,7),
   ADD COLUMN IF NOT EXISTS renov_year    INTEGER,
   ADD COLUMN IF NOT EXISTS build_quality TEXT DEFAULT 'gut',
   ADD COLUMN IF NOT EXISTS units_1z     INTEGER DEFAULT 0,

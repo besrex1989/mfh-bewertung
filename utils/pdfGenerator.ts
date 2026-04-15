@@ -3,6 +3,57 @@ import type { ValuationWithProperty, Profile } from "@/types";
 import { formatCHF, formatPct, getLageLabel, getConditionLabel, CONDITION_OPTIONS, QUALITY_OPTIONS, estimateRenovationNeeds, calcParkingIncome } from "@/lib/calculations";
 import type { LocationCategory } from "@/types";
 
+// ── Web Mercator: lat/lon → tile x/y ────────────────────────
+function lonToTileX(lon: number, zoom: number): number {
+  return ((lon + 180) / 360) * Math.pow(2, zoom);
+}
+function latToTileY(lat: number, zoom: number): number {
+  const rad = (lat * Math.PI) / 180;
+  return ((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * Math.pow(2, zoom);
+}
+
+// Fetch einzelne swisstopo Tile als JPEG buffer
+async function fetchTile(z: number, x: number, y: number): Promise<Uint8Array | null> {
+  try {
+    const url = `https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.pixelkarte-farbe/default/current/3857/${z}/${x}/${y}.jpeg`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const buf = await res.arrayBuffer();
+    return new Uint8Array(buf);
+  } catch {
+    return null;
+  }
+}
+
+// Lade 3x3 Tiles um die Koordinaten
+async function fetchMapTiles(lat: number, lon: number, zoom: number = 17): Promise<{
+  tiles: (Uint8Array | null)[][];
+  centerX: number;
+  centerY: number;
+  baseX: number;
+  baseY: number;
+} | null> {
+  const tx = lonToTileX(lon, zoom);
+  const ty = latToTileY(lat, zoom);
+  const baseX = Math.floor(tx) - 1; // 1 tile links/oben mehr
+  const baseY = Math.floor(ty) - 1;
+
+  const tiles: (Uint8Array | null)[][] = [];
+  for (let dy = 0; dy < 3; dy++) {
+    const row: (Uint8Array | null)[] = [];
+    for (let dx = 0; dx < 3; dx++) {
+      row.push(await fetchTile(zoom, baseX + dx, baseY + dy));
+    }
+    tiles.push(row);
+  }
+
+  // Pixel-Position des Markers innerhalb der 3x3 Kachel-Komposition (768x768)
+  const centerX = (tx - baseX) * 256;
+  const centerY = (ty - baseY) * 256;
+
+  return { tiles, centerX, centerY, baseX, baseY };
+}
+
 // ── Clean RA-Style Colors ───────────────────────────────────
 const C = {
   white:    rgb(1, 1, 1),
@@ -70,6 +121,12 @@ export async function generateValuationPDF(
   const pros = (valuation as any).pros;
   const cons = (valuation as any).cons;
   const cb = valuation as any;
+  const lat = Number(prop.lat);
+  const lon = Number(prop.lon);
+  const hasCoords = !isNaN(lat) && !isNaN(lon) && lat > 45.5 && lat < 48.0 && lon > 5.5 && lon < 11.0;
+
+  // Karte laden (parallel)
+  const mapDataPromise = hasCoords ? fetchMapTiles(lat, lon, 17) : Promise.resolve(null);
 
   // Wohnungsraster
   const ZL = ["1 Zi","1.5 Zi","2 Zi","2.5 Zi","3 Zi","3.5 Zi","4 Zi","4.5 Zi","5 Zi","5+ Zi"];
@@ -149,6 +206,47 @@ export async function generateValuationPDF(
     const agentLine = [profile.full_name, profile.company, profile.phone].filter(Boolean).join("  ·  ");
     rText(p1, agentLine, y, 8, norm, C.muted);
     y -= 16;
+  }
+
+  // ── Karte (swisstopo) ───────────────────────────────────
+  const mapData = await mapDataPromise;
+  if (mapData && mapData.tiles.some(row => row.some(t => t !== null))) {
+    const mapH = 180; // Kartenhoehe im PDF
+    const mapW = CW;
+    const tileDisplaySize = mapW / 3; // 3 Tiles nebeneinander
+
+    // Kartenrahmen
+    p1.drawRectangle({ x: ML, y: y - mapH - 4, width: mapW, height: mapH + 4, color: C.bg, borderColor: C.line, borderWidth: 0.5 });
+
+    // Tiles einzeln einbetten und zeichnen
+    for (let dy = 0; dy < 3; dy++) {
+      for (let dx = 0; dx < 3; dx++) {
+        const tile = mapData.tiles[dy][dx];
+        if (!tile) continue;
+        try {
+          const img = await doc.embedJpg(tile);
+          const tileX = ML + dx * tileDisplaySize;
+          const tileH = mapH / 3;
+          const tileY = y - (dy + 1) * tileH - 2;
+          p1.drawImage(img, { x: tileX, y: tileY, width: tileDisplaySize, height: tileH });
+        } catch {}
+      }
+    }
+
+    // Marker-Pin an der Position der Adresse
+    // centerX/Y sind Pixel im 768x768 Tile-System (3 Tiles × 256px)
+    const markerX = ML + (mapData.centerX / 768) * mapW;
+    const markerY = y - (mapData.centerY / 768) * mapH - 2;
+    // Pin-Schatten
+    p1.drawCircle({ x: markerX, y: markerY, size: 7, color: rgb(0, 0, 0), opacity: 0.25 });
+    // Pin-Haupt
+    p1.drawCircle({ x: markerX, y: markerY, size: 6, color: C.accent });
+    p1.drawCircle({ x: markerX, y: markerY, size: 2.5, color: C.white });
+
+    // swisstopo Attribution
+    p1.drawText("© swisstopo", { x: MR - 50, y: y - mapH - 1, size: 6, font: norm, color: C.light });
+
+    y -= mapH + 14;
   }
 
   // ── Immobiliendetails ──

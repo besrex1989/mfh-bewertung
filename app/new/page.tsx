@@ -48,6 +48,8 @@ export default function NewValuationPage() {
         units_4_5z:  +propertyForm.units_4_5z  || 0,
         units_5z:    +propertyForm.units_5z    || 0,
         units_5plus: +propertyForm.units_5plus || 0,
+        lat: propertyForm.lat ?? null,
+        lon: propertyForm.lon ?? null,
       });
 
       if (!property) throw new Error("Objekt konnte nicht gespeichert werden.");

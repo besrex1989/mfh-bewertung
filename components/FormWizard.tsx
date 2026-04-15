@@ -5,6 +5,9 @@ import { MUNICIPALITIES, KANTONE, lookupMunicipality } from "@/lib/municipalitie
 import { calculateValuation, CONDITION_OPTIONS, QUALITY_OPTIONS, LOCATION_INFO, formatCHF, formatPct } from "@/lib/calculations";
 import type { LocationRating, ValuationResult, Municipality } from "@/types";
 import AddressSearch from "@/components/AddressSearch";
+import dynamic from "next/dynamic";
+
+const AddressMap = dynamic(() => import("@/components/AddressMap"), { ssr: false });
 
 interface FormWizardProps {
   onComplete: (property: any, valuation: any, result: ValuationResult) => Promise<void>;
@@ -91,6 +94,7 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
   const [step, setStep] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [dynamicMuni, setDynamicMuni] = useState<Municipality | null>(null);
+  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
 
   const [property, setProperty] = useState({
     name: "", address: "", city: "", canton: "BE", zip: "",
@@ -197,12 +201,23 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
                 updP("city", r.city);
                 updP("canton", r.canton.toUpperCase());
                 if (!property.name) updP("name", `MFH ${r.street}`);
+                // Koordinaten fuer Karte
+                if (r.lat && r.lon) setCoords({ lat: r.lat, lon: r.lon });
                 // Gemeinde dynamisch nachschlagen (Einwohnerzahl)
                 lookupMunicipality(r.city, r.canton.toUpperCase()).then(m => {
                   if (m) setDynamicMuni(m);
                 });
               }}
             />
+
+            {coords && (
+              <AddressMap
+                lat={coords.lat}
+                lon={coords.lon}
+                label={`${property.address}, ${property.zip} ${property.city}`}
+                height={240}
+              />
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <FField label="Strasse / Nr. *" value={property.address} onChange={v => updP("address", v)} error={errors.address} type="text" placeholder="Musterstrasse 12" />

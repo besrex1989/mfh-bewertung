@@ -87,6 +87,7 @@ export default function NewValuationPage() {
         pros:                     valuationForm.pros || null,
         cons:                     valuationForm.cons || null,
         scenario:                 "neutral",
+        status:                   "erstellt",
       });
 
       if (!valuation) throw new Error("Bewertung konnte nicht gespeichert werden.");

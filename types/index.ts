@@ -79,6 +79,7 @@ export interface Valuation {
   pros:                  string | null;
   cons:                  string | null;
   scenario:              string | null;
+  status:                string;
   created_at:            string;
   updated_at:            string;
 }

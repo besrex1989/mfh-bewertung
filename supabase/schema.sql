@@ -134,6 +134,7 @@ CREATE TABLE IF NOT EXISTS public.valuations (
   pros              TEXT,
   cons              TEXT,
   scenario          TEXT DEFAULT 'neutral',
+  status            TEXT DEFAULT 'erstellt',
 
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()

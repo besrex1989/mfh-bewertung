@@ -55,4 +55,5 @@ ALTER TABLE public.valuations
   ADD COLUMN IF NOT EXISTS aap_count               INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS ehp_count               INTEGER NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS pros                    TEXT,
-  ADD COLUMN IF NOT EXISTS cons                    TEXT;
+  ADD COLUMN IF NOT EXISTS cons                    TEXT,
+  ADD COLUMN IF NOT EXISTS status                  TEXT DEFAULT 'erstellt';

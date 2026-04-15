@@ -8,6 +8,8 @@ interface AddressResult {
   zip: string;
   city: string;
   canton: string;
+  lat?: number;
+  lon?: number;
 }
 
 interface AddressSearchProps {
@@ -59,7 +61,11 @@ export default function AddressSearch({ onSelect, initialValue = "" }: AddressSe
         // Canton = last 2 characters of detail
         const canton = detail.trim().slice(-2).toUpperCase();
 
-        return { label: rawLabel, street, zip, city, canton };
+        // Koordinaten (lat/lon) von der API
+        const lat = typeof attrs.lat === "number" ? attrs.lat : undefined;
+        const lon = typeof attrs.lon === "number" ? attrs.lon : undefined;
+
+        return { label: rawLabel, street, zip, city, canton, lat, lon };
       }).filter((r: AddressResult) => r.street.length > 0);
 
       setResults(parsed);

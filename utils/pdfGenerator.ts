@@ -385,6 +385,13 @@ export async function generateValuationPDF(
   y2 = dataRow(p2, "Mikrolage-Korrektur", `${(cb.micro_correction ?? 0) >= 0 ? "+" : ""}${formatPct(cb.micro_correction ?? 0)}`, y2);
   y2 = dataRow(p2, "OeV-Anbindung", `${(cb.oev_correction ?? 0) >= 0 ? "+" : ""}${formatPct(cb.oev_correction ?? 0)}`, y2);
 
+  // Kostenzuschlaege
+  const sr = cb.surcharge_rent_risk ?? cb.base_cap_rate ? 0 : 0;
+  y2 = dataRow(p2, "Mietzinsrisiko", `+${formatPct(cb.surcharge_rent_risk ?? 0.25)}`, y2);
+  y2 = dataRow(p2, "Grundkosten", `+${formatPct(cb.surcharge_base_costs ?? 0.20)}`, y2);
+  y2 = dataRow(p2, "Verwaltung", `+${formatPct(cb.surcharge_admin ?? 0.30)}`, y2);
+  y2 = dataRow(p2, "Rueckstellungen", `+${formatPct(cb.surcharge_reserves ?? 0.70)}`, y2);
+
   // Finaler Satz
   y2 -= 4;
   p2.drawRectangle({ x: ML, y: y2 - 6, width: CW, height: 22, color: C.dark });
@@ -439,19 +446,67 @@ export async function generateValuationPDF(
 
   // Szenario-Zeilen
   const scenRows: [string, string][] = [
-    [`Konservativ  (+${bw.toFixed(2)} %)`, formatCHF(valuation.value_conservative)],
+    ["Konservativ  (-10%)", formatCHF(valuation.value_conservative)],
     [`Neutral  (${formatPct(valuation.cap_rate)})`, formatCHF(valuation.value_simple)],
-    [`Optimistisch  (-${bw.toFixed(2)} %)`, formatCHF(valuation.value_optimistic)],
+    ["Optimistisch  (+15%)", formatCHF(valuation.value_optimistic)],
   ];
   scenRows.forEach(([l, v]) => { y2 = dataRow(p2, l, v, y2); });
 
+  // ── Erweiterte KPIs ──
+  y2 -= 6;
+  y2 = sectionTitle(p2, "Kennzahlen", y2);
+
+  y2 = dataRow(p2, "Ertragswert brutto (NOI / Kap.-Satz)", formatCHF((valuation as any).net_income > 0 ? (valuation as any).net_income / (valuation.cap_rate / 100) : valuation.value_simple), y2);
+  y2 = dataRow(p2, "NOI / Jahr", formatCHF((valuation as any).net_income ?? 0), y2);
+  y2 = dataRow(p2, "Bruttorendite", `${valuation.gross_income > 0 && valuation.value_simple > 0 ? ((valuation.gross_income / valuation.value_simple) * 100).toFixed(2) : "—"} %`, y2);
+
+  if (totalArea > 0) {
+    y2 = dataRow(p2, "Preis / m2 Nutzflaeche", formatCHF(Math.round(valuation.value_simple / totalArea)), y2);
+  }
+
+  // Technische Entwertung (aus Reprokosten berechnen falls Kubatur vorhanden)
+  const pdfKubatur = prop.kubatur ? +prop.kubatur : 0;
+  if (pdfKubatur > 0) {
+    const pdfRepro = pdfKubatur * (prop.kubatur_price_m3 ? +prop.kubatur_price_m3 : 950) * 1.05;
+    const pdfAge = buildYear ? new Date().getFullYear() - buildYear : 30;
+    const pdfHasRenov = !!renovYear;
+    const pdfEffAge = pdfHasRenov ? Math.round(0.70 * pdfAge + 0.30 * (new Date().getFullYear() - (renovYear ?? buildYear ?? 1970))) : pdfAge;
+    let pdfDeprRate: number;
+    if (pdfEffAge <= 10) pdfDeprRate = 0.05;
+    else if (pdfEffAge <= 20) pdfDeprRate = 0.10;
+    else if (pdfEffAge <= 30) pdfDeprRate = 0.18;
+    else if (pdfEffAge <= 40) pdfDeprRate = 0.25;
+    else if (pdfEffAge <= 50) pdfDeprRate = 0.30;
+    else if (pdfEffAge <= 60) pdfDeprRate = 0.35;
+    else pdfDeprRate = 0.40;
+    if (pdfHasRenov) pdfDeprRate *= 0.70;
+    const pdfTechDepr = pdfRepro * pdfDeprRate;
+
+    y2 = dataRow(p2, `Reproduktionskosten (${pdfKubatur} m3)`, formatCHF(pdfRepro), y2);
+    y2 = dataRow(p2, `Technische Entwertung (${Math.round(pdfDeprRate * 100)}%)`, `-${formatCHF(pdfTechDepr)}`, y2, { color: C.red });
+  }
+
+  // IST/SOLL Abzug
+  const pdfIstW = (valuation as any).rent_residential_actual;
+  const pdfIstG = (valuation as any).rent_commercial_actual;
+  const pdfSollIstDiff = (valuation.rent_residential - (pdfIstW || valuation.rent_residential)) +
+                          (valuation.rent_commercial - (pdfIstG || valuation.rent_commercial));
+  if (pdfSollIstDiff > 500) {
+    const pvFactor = (1 - Math.pow(1.025, -10)) / 0.025;
+    y2 = dataRow(p2, `IST/SOLL Abzug (PV 2.5%, 10J)`, `-${formatCHF(pdfSollIstDiff * pvFactor)}`, y2, { color: C.amber });
+  }
+
+  // Landwert
+  const pdfLandArea = prop.land_area ? +prop.land_area : 0;
+  if (pdfLandArea > 0) {
+    const pdfLandPrice = prop.land_price_m2 ? +prop.land_price_m2 : 800;
+    y2 = dataRow(p2, `Landwert (${pdfLandArea} m2 x CHF ${pdfLandPrice})`, formatCHF(pdfLandArea * pdfLandPrice), y2, { color: C.green });
+  }
+
   // Substanzwert
   if (substanzValue > 0) {
-    y2 -= 6;
-    y2 = sectionTitle(p2, "Substanzwertmethode", y2);
-    y2 = dataRow(p2, "Baukosten", `${totalArea} m2 x CHF 2'800`, y2);
-    y2 = dataRow(p2, `Abschreibung (${ageForSub} Jahre x 1% = ${Math.round(depr * 100)}%)`, formatCHF(-totalArea * 2800 * depr), y2, { color: C.red });
-    y2 = dataRow(p2, "Geschaetzter Substanzwert", formatCHF(substanzValue), y2, { bold: true, color: C.green });
+    y2 -= 4;
+    y2 = dataRow(p2, "Substanzwert (indikativ)", formatCHF(substanzValue), y2, { bold: true, color: C.green });
   }
 
   // Wertfaktoren

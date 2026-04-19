@@ -103,6 +103,7 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
     num_units: "", living_area: "", commercial_area: "0",
     land_area: "", land_price_m2: "800",
     kubatur: "", kubatur_price_m3: "950",
+    gewerbe_buero: "0", gewerbe_laden: "0", gewerbe_gastro: "0", gewerbe_praxis: "0", gewerbe_sonstig: "0",
     units_1z: "0", units_1_5z: "0", units_2z: "0", units_2_5z: "0",
     units_3z: "0", units_3_5z: "0", units_4z: "0", units_4_5z: "0",
     units_5z: "0", units_5plus: "0",
@@ -287,7 +288,7 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
             </div>
 
             <div className="grid grid-cols-3 gap-3">
-              <FField label="Anz. Wohnungen *" value={property.num_units} onChange={v => updP("num_units", v)} error={errors.num_units} placeholder="8" />
+              <FField label="Anz. Einheiten Total *" value={property.num_units} onChange={v => updP("num_units", v)} error={errors.num_units} placeholder="10" note="Wohnungen + Gewerbe" />
               <FField label="Wohnflaeche (m2)" value={property.living_area} onChange={v => updP("living_area", v)} placeholder="620" />
               <FField label="Gewerbeflaeche (m2)" value={property.commercial_area} onChange={v => updP("commercial_area", v)} placeholder="0" />
             </div>
@@ -365,20 +366,63 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
               </div>
             </div>
 
-            {/* Zusammenfassung */}
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Total Wohnungen aus Raster:</span>
-                <span className={`font-bold ${totalUnitsFromRaster !== +property.num_units && +property.num_units > 0 ? "text-amber-600" : "text-green-600"}`}>
-                  {totalUnitsFromRaster}
-                </span>
+            {/* Gewerbeeinheiten */}
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Gewerbeeinheiten</p>
+              <div className="space-y-2">
+                {[
+                  { label: "Buero", key: "gewerbe_buero" },
+                  { label: "Laden / Retail", key: "gewerbe_laden" },
+                  { label: "Gastro / Restaurant", key: "gewerbe_gastro" },
+                  { label: "Praxis / Atelier", key: "gewerbe_praxis" },
+                  { label: "Lager / Sonstiges", key: "gewerbe_sonstig" },
+                ].map(g => (
+                  <div key={g.key} className="flex items-center gap-3">
+                    <span className="w-32 text-sm text-gray-600 font-medium">{g.label}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={(property as any)[g.key] ?? "0"}
+                      onChange={e => updP(g.key, e.target.value)}
+                      className="w-20 text-center input-field py-1.5 text-sm"
+                      placeholder="0"
+                    />
+                  </div>
+                ))}
               </div>
-              {totalUnitsFromRaster !== +property.num_units && +property.num_units > 0 && (
-                <p className="text-xs text-amber-600 mt-1">
-                  Hinweis: Summe ({totalUnitsFromRaster}) weicht von Anzahl Wohnungen ({property.num_units}) ab.
-                </p>
-              )}
             </div>
+
+            {/* Zusammenfassung */}
+            {(() => {
+              const totalGewerbe = ["gewerbe_buero","gewerbe_laden","gewerbe_gastro","gewerbe_praxis","gewerbe_sonstig"]
+                .reduce((s, k) => s + (+(property as any)[k] || 0), 0);
+              const totalEinheiten = totalUnitsFromRaster + totalGewerbe;
+              return (
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Wohnungen (Raster):</span>
+                    <span className="font-bold text-gray-700">{totalUnitsFromRaster}</span>
+                  </div>
+                  {totalGewerbe > 0 && (
+                    <div className="flex justify-between text-sm mt-1">
+                      <span className="text-gray-500">Gewerbeeinheiten:</span>
+                      <span className="font-bold text-gray-700">{totalGewerbe}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm mt-1 pt-1 border-t border-gray-200">
+                    <span className="text-gray-500 font-semibold">Total Einheiten:</span>
+                    <span className={`font-bold ${totalEinheiten !== +property.num_units && +property.num_units > 0 ? "text-amber-600" : "text-green-600"}`}>
+                      {totalEinheiten}
+                    </span>
+                  </div>
+                  {totalEinheiten !== +property.num_units && +property.num_units > 0 && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      Hinweis: Summe ({totalEinheiten}) weicht von Anz. Einheiten ({property.num_units}) ab.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Verteilung visuell */}
             {totalUnitsFromRaster > 0 && (

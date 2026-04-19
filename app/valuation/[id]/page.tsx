@@ -54,6 +54,10 @@ export default function ValuationDetailPage() {
         num_units:       data.properties?.num_units ?? "",
         living_area:     data.properties?.living_area ?? "",
         commercial_area: data.properties?.commercial_area ?? "",
+        land_area:       data.properties?.land_area ?? "",
+        land_price_m2:   data.properties?.land_price_m2 ?? "800",
+        kubatur:         data.properties?.kubatur ?? "",
+        kubatur_price_m3: data.properties?.kubatur_price_m3 ?? "950",
       });
       setValForm({
         rent_residential:         data.rent_residential ?? "",
@@ -72,6 +76,10 @@ export default function ValuationDetailPage() {
         notes:                    data.notes ?? "",
         pros:                     data.pros ?? "",
         cons:                     data.cons ?? "",
+        surcharge_rent_risk:      data.surcharge_rent_risk ?? "0.25",
+        surcharge_base_costs:     data.surcharge_base_costs ?? "0.20",
+        surcharge_admin:          data.surcharge_admin ?? "0.30",
+        surcharge_reserves:       data.surcharge_reserves ?? "0.70",
       });
 
       recompute(data, data.properties);
@@ -103,6 +111,14 @@ export default function ValuationDetailPage() {
         microLocation:         val.micro_location  ?? "gut",
         macroLocation:         val.macro_location  ?? "gut",
         publicTransport:       val.public_transport ?? "gut",
+        landArea:              +prop?.land_area || 0,
+        landPricePerM2:        +prop?.land_price_m2 || 800,
+        kubatur:               +prop?.kubatur || 0,
+        kubaturPricePerM3:     +prop?.kubatur_price_m3 || 950,
+        surchargeRentRisk:     +val.surcharge_rent_risk || 0,
+        surchargeBaseCosts:    +val.surcharge_base_costs || 0,
+        surchargeAdmin:        +val.surcharge_admin || 0,
+        surchargeReserves:     +val.surcharge_reserves || 0,
       });
       setResult(r);
     } catch (e) { console.error(e); }
@@ -124,6 +140,10 @@ export default function ValuationDetailPage() {
       num_units:       propForm.num_units   ? +propForm.num_units   : null,
       living_area:     propForm.living_area ? +propForm.living_area : null,
       commercial_area: propForm.commercial_area ? +propForm.commercial_area : null,
+      land_area:       propForm.land_area ? +propForm.land_area : null,
+      land_price_m2:   propForm.land_price_m2 ? +propForm.land_price_m2 : null,
+      kubatur:         propForm.kubatur ? +propForm.kubatur : null,
+      kubatur_price_m3: propForm.kubatur_price_m3 ? +propForm.kubatur_price_m3 : null,
     }).eq("id", valuation.property_id);
 
     const mergedProp = { ...property, ...propForm };
@@ -148,6 +168,14 @@ export default function ValuationDetailPage() {
       microLocation:         valForm.micro_location,
       macroLocation:         valForm.macro_location,
       publicTransport:       valForm.public_transport,
+      landArea:              +propForm.land_area || 0,
+      landPricePerM2:        +propForm.land_price_m2 || 800,
+      kubatur:               +propForm.kubatur || 0,
+      kubaturPricePerM3:     +propForm.kubatur_price_m3 || 950,
+      surchargeRentRisk:     +valForm.surcharge_rent_risk || 0,
+      surchargeBaseCosts:    +valForm.surcharge_base_costs || 0,
+      surchargeAdmin:        +valForm.surcharge_admin || 0,
+      surchargeReserves:     +valForm.surcharge_reserves || 0,
     });
 
     await supabase.from("valuations").update({
@@ -322,9 +350,16 @@ export default function ValuationDetailPage() {
                 <Inp label="Sanierungsjahr" k="renov_year" source="p" />
                 <Sel label="Zustand" k="condition" source="p" options={CONDITION_OPTIONS.map(o => ({ value: o.value, label: o.label }))} />
                 <Sel label="Bauqualitaet" k="build_quality" source="p" options={QUALITY_OPTIONS.map(o => ({ value: o.value, label: o.label }))} />
-                <Inp label="Anzahl Wohnungen" k="num_units" source="p" />
+                <Inp label="Anzahl Einheiten" k="num_units" source="p" />
                 <Inp label="Wohnflaeche (m2)" k="living_area" source="p" />
                 <Inp label="Gewerbeflaeche (m2)" k="commercial_area" source="p" />
+                <div className="col-span-2 pt-2 border-t border-gray-200">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Grundstueck &amp; Kubatur</p>
+                </div>
+                <Inp label="Grundstueck (m2)" k="land_area" source="p" />
+                <Inp label="Landwert CHF/m2" k="land_price_m2" source="p" />
+                <Inp label="Kubatur GV (m3)" k="kubatur" source="p" />
+                <Inp label="CHF/m3 Ansatz" k="kubatur_price_m3" source="p" />
               </div>
             )}
 
@@ -370,6 +405,30 @@ export default function ValuationDetailPage() {
                   <Sel label="Mikrolage"     k="micro_location"   source="v" options={locationOpts} />
                   <Sel label="Makrolage"     k="macro_location"   source="v" options={locationOpts} />
                   <Sel label="OeV-Anbindung" k="public_transport" source="v" options={locationOpts} />
+                </div>
+
+                {/* Kap-Satz Zuschlaege */}
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Kap.-Satz Kostenzuschlaege</p>
+                  <div className="space-y-3">
+                    {[
+                      { key: "surcharge_rent_risk", label: "Mietzinsrisiko", min: 0, max: 1.0, step: 0.05 },
+                      { key: "surcharge_base_costs", label: "Grundkosten", min: 0, max: 0.5, step: 0.05 },
+                      { key: "surcharge_admin", label: "Verwaltung", min: 0, max: 0.5, step: 0.05 },
+                      { key: "surcharge_reserves", label: "Rueckstellungen", min: 0.3, max: 1.5, step: 0.05 },
+                    ].map(s => (
+                      <div key={s.key} className="flex items-center gap-3">
+                        <span className="w-28 text-xs text-gray-600">{s.label}</span>
+                        <input type="range" min={s.min} max={s.max} step={s.step}
+                          value={valForm[s.key] ?? 0}
+                          onChange={e => updV(s.key, e.target.value)}
+                          className="flex-1 h-1.5 accent-blue-600" />
+                        <span className="w-14 text-xs font-bold text-gray-700 text-right">
+                          {(+valForm[s.key] || 0).toFixed(2)} %
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>

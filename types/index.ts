@@ -94,6 +94,7 @@ export interface ValuationResult {
   grossIncome:          number;
   effectiveIncome:      number;
   netIncome:            number;
+  noi:                  number;
   sustainableIncome:    number;
   parkingIncome:        number;
   substanzValue:        number;
@@ -103,6 +104,14 @@ export interface ValuationResult {
   valueExtended:        number;
   valueConservative:    number;
   valueOptimistic:      number;
+  ertragswertBrutto:    number;
+  techDepreciation:     number;
+  reproTotal:           number;
+  sollIstPvAbzug:       number;
+  landValueTotal:       number;
+  bruttoRendite:        number;
+  preisProM2:           number;
+  opCostRate:           number;
   locationCategory:     LocationCategory;
   commercialShare:      number;
   residentialShare:     number;
@@ -124,6 +133,10 @@ export interface CapRateBreakdown {
   qualityDelta:        number;
   commercialSurcharge: number;
   oevDelta:            number;
+  surchargeRentRisk:   number;
+  surchargeBaseCosts:  number;
+  surchargeAdmin:      number;
+  surchargeReserves:   number;
   base:                number;
   final:               number;
 }

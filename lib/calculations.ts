@@ -91,6 +91,43 @@ export const VALUATION_CONFIG = {
     schwach:   0.08,
   },
 
+  // Bewirtschaftungskosten-Satz nach Zustand (% vom Mietertrag)
+  operatingCostRate: {
+    stufe6: 0.10,
+    stufe5: 0.12,
+    stufe4: 0.15,
+    stufe3: 0.20,
+    stufe2: 0.25,
+    stufe1: 0.25,
+  } as Record<string, number>,
+
+  // Technische Entwertung nach Alter (% der Reproduktionskosten)
+  depreciationByAge: (age: number, hasRenovation: boolean): number => {
+    let rate: number;
+    if (age <= 10)      rate = 0.05;
+    else if (age <= 20) rate = 0.10;
+    else if (age <= 30) rate = 0.18;
+    else if (age <= 40) rate = 0.25;
+    else if (age <= 50) rate = 0.30;
+    else if (age <= 60) rate = 0.35;
+    else                rate = 0.40; // Cap
+    if (hasRenovation) rate *= 0.70;
+    return rate;
+  },
+
+  // IST/SOLL Barwertfaktor (PV-Rente, Zins 2.5%, 10 Jahre)
+  pvAnnuityFactor: (rate: number = 0.025, years: number = 10): number => {
+    return (1 - Math.pow(1 + rate, -years)) / rate;
+  },
+
+  // Default Kostenzuschlaege fuer Kap-Satz
+  defaultSurcharges: {
+    rentRisk:   0.25,
+    baseCosts:  0.20,
+    admin:      0.30,
+    reserves:   0.70,
+  },
+
   // Szenario-Bandbreite
   scenarioBandwidth: 0.30,
 
@@ -307,6 +344,16 @@ export interface CalculationInput {
   microLocation:         LocationRating;
   macroLocation:         LocationRating;
   publicTransport:       LocationRating;
+  // Neue erweiterte Felder
+  landArea?:             number;
+  landPricePerM2?:       number;
+  kubatur?:              number;
+  kubaturPricePerM3?:    number;
+  // Editierbare Kap-Satz Zuschlaege
+  surchargeRentRisk?:    number;
+  surchargeBaseCosts?:   number;
+  surchargeAdmin?:       number;
+  surchargeReserves?:    number;
 }
 
 // ── Hauptberechnung ─────────────────────────────────────────
@@ -320,6 +367,12 @@ export function calculateValuation(input: CalculationInput): ValuationResult {
     livingArea, commercialArea,
     aapCount, ehpCount,
     microLocation, macroLocation, publicTransport,
+    landArea = 0, landPricePerM2 = 800,
+    kubatur = 0, kubaturPricePerM3 = 950,
+    surchargeRentRisk = VALUATION_CONFIG.defaultSurcharges.rentRisk,
+    surchargeBaseCosts = VALUATION_CONFIG.defaultSurcharges.baseCosts,
+    surchargeAdmin = VALUATION_CONFIG.defaultSurcharges.admin,
+    surchargeReserves = VALUATION_CONFIG.defaultSurcharges.reserves,
   } = input;
 
   // 1. Lageklasse aus Gemeinde-DB oder Makrolage
@@ -346,9 +399,12 @@ export function calculateValuation(input: CalculationInput): ValuationResult {
   const commercialShare = Math.max(commShareRev, commShareArea);
   const commercialSurcharge = VALUATION_CONFIG.commercialDelta(commercialShare);
 
-  const finalCapRate = Math.max(2.50, Math.min(7.00,
+  // Editierbare Kostenzuschlaege
+  const totalSurcharges = surchargeRentRisk + surchargeBaseCosts + surchargeAdmin + surchargeReserves;
+
+  const finalCapRate = Math.max(2.50, Math.min(8.00,
     riskFreeRate + marketPremium + macroDelta + microDelta +
-    condDelta + ageDelta + qualityDelta + commercialSurcharge + oevDelta
+    condDelta + ageDelta + qualityDelta + commercialSurcharge + oevDelta + totalSurcharges
   ));
 
   const capRateBreakdown: CapRateBreakdown = {
@@ -361,6 +417,10 @@ export function calculateValuation(input: CalculationInput): ValuationResult {
     qualityDelta,
     commercialSurcharge,
     oevDelta,
+    surchargeRentRisk,
+    surchargeBaseCosts,
+    surchargeAdmin,
+    surchargeReserves,
     base: riskFreeRate + marketPremium,
     final: finalCapRate,
   };
@@ -374,28 +434,66 @@ export function calculateValuation(input: CalculationInput): ValuationResult {
   const sustainableIncome   = grossTarget * (1 - leerstandNachhaltig / 100) + parkingIncome;
   const effectiveIncome     = istWohnen + istGewerbe + parkingIncome;
   const grossIncome         = grossTarget + parkingIncome;
-  const netIncome           = Math.max(0, effectiveIncome - operatingCosts - maintenanceCosts);
 
-  // 4. Werte
-  const valueSimple       = effectiveIncome   / (finalCapRate / 100);
-  const valueSustainable  = sustainableIncome / (finalCapRate / 100);
-  const valueExtended     = netIncome > 0 ? netIncome / (finalCapRate / 100) : 0;
-  const valueConservative = effectiveIncome / ((finalCapRate + VALUATION_CONFIG.scenarioBandwidth) / 100);
-  const valueOptimistic   = effectiveIncome / ((finalCapRate - VALUATION_CONFIG.scenarioBandwidth) / 100);
+  // 3b. NOI (Bewirtschaftungskosten nach Zustand)
+  const opCostRate = VALUATION_CONFIG.operatingCostRate[condition] ?? 0.15;
+  const autoOperatingCosts = effectiveIncome * opCostRate;
+  const totalCosts = operatingCosts > 0 || maintenanceCosts > 0
+    ? operatingCosts + maintenanceCosts
+    : autoOperatingCosts;
+  const noi = Math.max(0, effectiveIncome - totalCosts);
+  const netIncome = noi;
 
-  // 5. Substanzwert (analog RealAdvisor)
+  // 4. Ertragswert brutto
+  const ertragswertBrutto = noi / (finalCapRate / 100);
+
+  // 5. Landwert
+  const landValueTotal = landArea > 0 ? landArea * landPricePerM2 : 0;
+
+  // 5b. Reproduktionskosten + Technische Entwertung
   const buildYear_ = buildYear ?? 1970;
-  const ageForSubstanz = new Date().getFullYear() - (renovYear ?? buildYear_);
-  const depreciationRate = Math.min(ageForSubstanz * 0.01, 0.50); // max 50% Abschreibung
-  const buildingNewValue = totalArea > 0 ? (livingArea + commercialArea) * 2800 : livingArea * 2800;
-  const landValue = totalArea > 0 ? 0 : 0; // Grundstückswert: wird separat im UI eingegeben
-  const substanzValue = buildingNewValue * (1 - depreciationRate) + landValue;
+  const age = new Date().getFullYear() - buildYear_;
+  const hasRenovation = !!renovYear;
+  const effectiveAge = hasRenovation
+    ? Math.round(0.70 * age + 0.30 * (new Date().getFullYear() - (renovYear ?? buildYear_)))
+    : age;
 
-  // 6. Soll/Ist Differenz
+  const umgebungsFlaeche = landArea > 0 ? landArea * 0.80 : 0;
+  const reproBuilding = kubatur > 0 ? kubatur * kubaturPricePerM3 : 0;
+  const reproUmgebung = umgebungsFlaeche * 400;
+  const reproBNK = (reproBuilding + reproUmgebung) * 0.05;
+  const reproTotal = reproBuilding + reproUmgebung + reproBNK;
+
+  const depreciationRate = VALUATION_CONFIG.depreciationByAge(effectiveAge, hasRenovation);
+  const techDepreciation = reproTotal > 0 ? reproTotal * depreciationRate : 0;
+
+  // 5c. Substanzwert
+  const ageForSubstanz = new Date().getFullYear() - (renovYear ?? buildYear_);
+  const simpleDeprRate = Math.min(ageForSubstanz * 0.01, 0.50);
+  const buildingNewValue = totalArea > 0 ? totalArea * 2800 : 0;
+  const substanzValue = reproTotal > 0
+    ? reproTotal - techDepreciation + landValueTotal
+    : buildingNewValue * (1 - simpleDeprRate) + landValueTotal;
+
+  // 6. IST/SOLL Rentenbarwert-Abzug
   const sollIstDiffWohnen  = rentResidentialTarget - istWohnen;
   const sollIstDiffGewerbe = rentCommercialTarget  - istGewerbe;
+  const totalSollIstDiff   = sollIstDiffWohnen + sollIstDiffGewerbe;
+  const pvFactor = VALUATION_CONFIG.pvAnnuityFactor(0.025, 10);
+  const sollIstPvAbzug = totalSollIstDiff > 0 ? -(totalSollIstDiff * pvFactor) : 0;
   const hasUptidePotential = sollIstDiffWohnen > 0.05 * rentResidentialTarget
                           || sollIstDiffGewerbe > 0.05 * rentCommercialTarget;
+
+  // 7. Endwert
+  const valueSimple       = ertragswertBrutto - techDepreciation + sollIstPvAbzug;
+  const valueSustainable  = sustainableIncome / (finalCapRate / 100);
+  const valueExtended     = noi > 0 ? noi / (finalCapRate / 100) : 0;
+  const valueConservative = valueSimple * 0.90;
+  const valueOptimistic   = valueSimple * 1.15;
+
+  // KPIs
+  const bruttoRendite = valueSimple > 0 ? (grossIncome / valueSimple) * 100 : 0;
+  const preisProM2 = totalArea > 0 ? valueSimple / totalArea : 0;
 
   // 7. Confidence
   let confidence: ConfidenceLevel = "Medium";
@@ -420,12 +518,16 @@ export function calculateValuation(input: CalculationInput): ValuationResult {
     (parkingIncome > 0 ? ` Parkplatz-Zusatzertrag: ${formatCHF(parkingIncome)}/Jahr.` : "");
 
   return {
-    grossIncome, effectiveIncome, netIncome,
+    grossIncome, effectiveIncome, netIncome, noi,
     sustainableIncome, parkingIncome,
     substanzValue,
     capRateBreakdown,
     valueSimple, valueSustainable, valueExtended,
     valueConservative, valueOptimistic,
+    ertragswertBrutto,
+    techDepreciation, reproTotal,
+    sollIstPvAbzug, landValueTotal,
+    bruttoRendite, preisProM2, opCostRate,
     locationCategory,
     commercialShare, residentialShare: 1 - commercialShare,
     gwInfo, confidence, plausiText,

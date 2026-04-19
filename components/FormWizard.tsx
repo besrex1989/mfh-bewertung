@@ -100,7 +100,9 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
     name: "", address: "", city: "", canton: "BE", zip: "",
     build_year: "", renov_year: "",
     condition: "stufe4", build_quality: "gut",
-    num_units: "", living_area: "", commercial_area: "0", commercial_units: "0",
+    num_units: "", living_area: "", commercial_area: "0",
+    land_area: "", land_price_m2: "800",
+    kubatur: "", kubatur_price_m3: "950",
     units_1z: "0", units_1_5z: "0", units_2z: "0", units_2_5z: "0",
     units_3z: "0", units_3_5z: "0", units_4z: "0", units_4_5z: "0",
     units_5z: "0", units_5plus: "0",
@@ -119,6 +121,10 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
     notes: "",
     pros: "",
     cons: "",
+    surcharge_rent_risk: "0.25",
+    surcharge_base_costs: "0.20",
+    surcharge_admin: "0.30",
+    surcharge_reserves: "0.70",
   });
 
   const updP = (k: string, v: string) => setProperty(p => ({ ...p, [k]: v }));
@@ -151,6 +157,14 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
         microLocation:   valuation.micro_location,
         macroLocation:   valuation.macro_location,
         publicTransport: valuation.public_transport,
+        landArea:           +property.land_area || 0,
+        landPricePerM2:     +property.land_price_m2 || 800,
+        kubatur:            +property.kubatur || 0,
+        kubaturPricePerM3:  +property.kubatur_price_m3 || 950,
+        surchargeRentRisk:  +valuation.surcharge_rent_risk || 0,
+        surchargeBaseCosts: +valuation.surcharge_base_costs || 0,
+        surchargeAdmin:     +valuation.surcharge_admin || 0,
+        surchargeReserves:  +valuation.surcharge_reserves || 0,
       });
     } catch { return null; }
   })();
@@ -278,6 +292,34 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
               <FField label="Gewerbeflaeche (m2)" value={property.commercial_area} onChange={v => updP("commercial_area", v)} placeholder="0" />
             </div>
 
+            {/* Erweiterte Eingaben: Grundstueck + Kubatur */}
+            <details className="mt-2">
+              <summary className="text-xs font-semibold text-blue-600 cursor-pointer hover:text-blue-800">
+                Erweiterte Eingaben (Grundstueck, Kubatur)
+              </summary>
+              <div className="mt-3 space-y-3 bg-gray-50 rounded-xl p-4 border border-gray-200">
+                <p className="text-xs text-gray-400">Fuer Substanzwert und Technische Entwertung</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <FField label="Grundstuecksflaeche (m2)" value={property.land_area} onChange={v => updP("land_area", v)} placeholder="500" note="Optional" />
+                  <FField label="Landwert CHF/m2" value={property.land_price_m2} onChange={v => updP("land_price_m2", v)} placeholder="800" />
+                </div>
+                {+property.land_area > 0 && (
+                  <p className="text-xs text-blue-600 font-semibold">
+                    Landwert Total: CHF {(+property.land_area * +property.land_price_m2).toLocaleString("de-CH")}
+                  </p>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <FField label="Kubatur GV (m3)" value={property.kubatur} onChange={v => updP("kubatur", v)} placeholder="3500" note="Gebaeudeversicherungsvolumen" />
+                  <FField label="CHF/m3 Ansatz" value={property.kubatur_price_m3} onChange={v => updP("kubatur_price_m3", v)} placeholder="950" />
+                </div>
+                {+property.kubatur > 0 && (
+                  <p className="text-xs text-blue-600 font-semibold">
+                    Reprokosten: CHF {Math.round((+property.kubatur * +property.kubatur_price_m3) * 1.05).toLocaleString("de-CH")} (inkl. 5% BNK)
+                  </p>
+                )}
+              </div>
+            </details>
+
             {property.city && (() => {
               const m = MUNICIPALITIES.find(x => x.name.toLowerCase() === property.city.toLowerCase()) ?? dynamicMuni;
               const lageLabels: Record<string, string> = { sehrStark: "Sehr stark", gut: "Gut", durchschnitt: "Durchschnittlich", sekundaer: "Sekundaer" };
@@ -323,25 +365,6 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
               </div>
             </div>
 
-            {/* Gewerbeeinheiten */}
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-3">Gewerbeeinheiten</p>
-              <div className="space-y-2">
-                <div className="flex items-center gap-3">
-                  <span className="w-16 text-sm text-gray-600 font-medium">Anzahl</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={property.commercial_units ?? "0"}
-                    onChange={e => updP("commercial_units", e.target.value)}
-                    className="w-20 text-center input-field py-1.5 text-sm"
-                    placeholder="0"
-                  />
-                  <span className="text-xs text-gray-400">Gewerbeeinheiten (Laden, Buero, etc.)</span>
-                </div>
-              </div>
-            </div>
-
             {/* Zusammenfassung */}
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
               <div className="flex justify-between text-sm">
@@ -354,12 +377,6 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
                 <p className="text-xs text-amber-600 mt-1">
                   Hinweis: Summe ({totalUnitsFromRaster}) weicht von Anzahl Wohnungen ({property.num_units}) ab.
                 </p>
-              )}
-              {+(property.commercial_units ?? 0) > 0 && (
-                <div className="flex justify-between text-sm mt-2 pt-2 border-t border-gray-200">
-                  <span className="text-gray-500">Gewerbeeinheiten:</span>
-                  <span className="font-bold text-gray-700">{property.commercial_units}</span>
-                </div>
               )}
             </div>
 
@@ -497,6 +514,42 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
               <div />
             </div>
 
+            {/* Editierbare Kap-Satz Zuschlaege */}
+            <details>
+              <summary className="text-xs font-semibold text-blue-600 cursor-pointer hover:text-blue-800">
+                Kap.-Satz Kostenzuschlaege anpassen
+              </summary>
+              <div className="mt-3 bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-3">
+                <p className="text-xs text-gray-400">Diese Zuschlaege werden zum Basiszins addiert</p>
+                {[
+                  { key: "surcharge_rent_risk", label: "Mietzinsrisiko", min: 0, max: 1.0, step: 0.05 },
+                  { key: "surcharge_base_costs", label: "Grundkosten", min: 0, max: 0.5, step: 0.05 },
+                  { key: "surcharge_admin", label: "Verwaltung", min: 0, max: 0.5, step: 0.05 },
+                  { key: "surcharge_reserves", label: "Rueckstellungen", min: 0.3, max: 1.5, step: 0.05 },
+                ].map(s => (
+                  <div key={s.key} className="flex items-center gap-3">
+                    <span className="w-28 text-xs text-gray-600">{s.label}</span>
+                    <input
+                      type="range"
+                      min={s.min} max={s.max} step={s.step}
+                      value={(valuation as any)[s.key]}
+                      onChange={e => updV(s.key, e.target.value)}
+                      className="flex-1 h-1.5 accent-blue-600"
+                    />
+                    <span className="w-14 text-xs font-bold text-gray-700 text-right">
+                      {(+(valuation as any)[s.key]).toFixed(2)} %
+                    </span>
+                  </div>
+                ))}
+                <div className="pt-2 border-t border-gray-200 flex justify-between text-xs font-bold">
+                  <span className="text-gray-600">Total Zuschlaege:</span>
+                  <span className="text-blue-600">
+                    {(+valuation.surcharge_rent_risk + +valuation.surcharge_base_costs + +valuation.surcharge_admin + +valuation.surcharge_reserves).toFixed(2)} %
+                  </span>
+                </div>
+              </div>
+            </details>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="label">Wertsteigernde Faktoren</label>
@@ -569,19 +622,58 @@ export default function FormWizard({ onComplete, saving }: FormWizardProps) {
             </div>
 
             {liveResult && (
-              <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl p-5 text-white">
-                <p className="text-[10px] text-blue-200 uppercase tracking-widest font-semibold mb-2">Bewertungsergebnis</p>
-                <p className="text-3xl font-black mb-1">{formatCHF(liveResult.valueSimple)}</p>
-                <p className="text-blue-200 text-xs">Kap.-Satz: {formatPct(liveResult.capRateBreakdown.final)}</p>
-                {liveResult.parkingIncome > 0 && (
-                  <p className="text-blue-200 text-xs mt-1">inkl. Parkplatz-Ertrag: {formatCHF(liveResult.parkingIncome)}/Jahr</p>
-                )}
-                <div className="mt-3 pt-3 border-t border-blue-500 grid grid-cols-3 gap-2 text-xs">
-                  <div><p className="text-blue-300">Konservativ</p><p className="font-bold">{formatCHF(liveResult.valueConservative)}</p></div>
-                  <div><p className="text-blue-300">Neutral</p><p className="font-bold">{formatCHF(liveResult.valueSimple)}</p></div>
-                  <div><p className="text-blue-300">Optimistisch</p><p className="font-bold">{formatCHF(liveResult.valueOptimistic)}</p></div>
+              <>
+                <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl p-5 text-white">
+                  <p className="text-[10px] text-blue-200 uppercase tracking-widest font-semibold mb-2">Ertragswert (Final)</p>
+                  <p className="text-3xl font-black mb-1">{formatCHF(liveResult.valueSimple)}</p>
+                  <p className="text-blue-200 text-xs">Kap.-Satz: {formatPct(liveResult.capRateBreakdown.final)}</p>
+                  <div className="mt-3 pt-3 border-t border-blue-500 grid grid-cols-3 gap-2 text-xs">
+                    <div><p className="text-blue-300">Konservativ (-10%)</p><p className="font-bold">{formatCHF(liveResult.valueConservative)}</p></div>
+                    <div><p className="text-blue-300">Neutral</p><p className="font-bold">{formatCHF(liveResult.valueSimple)}</p></div>
+                    <div><p className="text-blue-300">Optimistisch (+15%)</p><p className="font-bold">{formatCHF(liveResult.valueOptimistic)}</p></div>
+                  </div>
                 </div>
-              </div>
+
+                {/* Erweiterte KPIs */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <p className="text-[10px] text-gray-400 uppercase tracking-widest">NOI / Jahr</p>
+                    <p className="text-lg font-bold text-gray-900">{formatCHF(liveResult.noi)}</p>
+                    <p className="text-[10px] text-gray-400">BW-Kosten: {Math.round(liveResult.opCostRate * 100)}%</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <p className="text-[10px] text-gray-400 uppercase tracking-widest">Bruttorendite</p>
+                    <p className="text-lg font-bold text-gray-900">{liveResult.bruttoRendite.toFixed(2)} %</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <p className="text-[10px] text-gray-400 uppercase tracking-widest">Preis / m2</p>
+                    <p className="text-lg font-bold text-gray-900">{formatCHF(liveResult.preisProM2)}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <p className="text-[10px] text-gray-400 uppercase tracking-widest">Ertragswert brutto</p>
+                    <p className="text-lg font-bold text-gray-900">{formatCHF(liveResult.ertragswertBrutto)}</p>
+                  </div>
+                  {liveResult.techDepreciation > 0 && (
+                    <div className="bg-red-50 rounded-lg p-3 border border-red-200">
+                      <p className="text-[10px] text-red-500 uppercase tracking-widest">Techn. Entwertung</p>
+                      <p className="text-lg font-bold text-red-600">-{formatCHF(liveResult.techDepreciation)}</p>
+                    </div>
+                  )}
+                  {liveResult.sollIstPvAbzug < 0 && (
+                    <div className="bg-orange-50 rounded-lg p-3 border border-orange-200">
+                      <p className="text-[10px] text-orange-500 uppercase tracking-widest">IST/SOLL Abzug</p>
+                      <p className="text-lg font-bold text-orange-600">{formatCHF(liveResult.sollIstPvAbzug)}</p>
+                      <p className="text-[10px] text-gray-400">PV 2.5%, 10J</p>
+                    </div>
+                  )}
+                  {liveResult.landValueTotal > 0 && (
+                    <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                      <p className="text-[10px] text-green-600 uppercase tracking-widest">Landwert</p>
+                      <p className="text-lg font-bold text-green-700">{formatCHF(liveResult.landValueTotal)}</p>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
         )}
